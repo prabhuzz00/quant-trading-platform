@@ -15,7 +15,6 @@ class StrategyEngine:
         self.strategy_registry = strategy_registry
         self._tick_queue: asyncio.Queue = None
         self._order_queue: asyncio.Queue = None
-        self._signal_queue: asyncio.Queue = None
         self._running = False
 
     async def start(self):

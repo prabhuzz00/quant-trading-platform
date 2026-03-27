@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -32,5 +32,5 @@ class Signal:
     trailing_sl: float = 0.0
     reason: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     signal_id: str = field(default_factory=lambda: __import__('uuid').uuid4().hex[:12])

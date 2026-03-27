@@ -1,6 +1,6 @@
 import asyncio
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 from core.xts_client import XTSMarketDataClient
 
@@ -32,7 +32,7 @@ class InstrumentManager:
 
     async def get_nearest_expiry(self, symbol: str) -> Optional[str]:
         expiries = await self.get_expiry_dates(symbol)
-        today = datetime.now()
+        today = datetime.now(timezone.utc).replace(tzinfo=None)
         for exp in expiries:
             try:
                 exp_date = datetime.strptime(exp, "%b %d %Y")

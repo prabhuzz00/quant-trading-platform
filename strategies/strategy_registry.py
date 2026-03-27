@@ -18,6 +18,8 @@ class StrategyRegistry:
         logger.info("Strategy unregistered", name=name)
 
     def get_strategy(self, name: str) -> BaseStrategy:
+        if name not in self._strategies:
+            raise KeyError(f"Strategy '{name}' is not registered")
         return self._strategies[name]
 
     def get_enabled_strategies(self) -> List[BaseStrategy]:
