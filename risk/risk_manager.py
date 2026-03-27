@@ -45,7 +45,9 @@ class RiskManager:
         if signal.exchange_segment not in self.config.allowed_segments:
             return False, f"Segment {signal.exchange_segment} not in allowed segments"
 
-        base_symbol = signal.symbol.split("_")[0]
+        # Derive base symbol: "NIFTY_CE" -> "NIFTY", "BANKNIFTY" -> "BANKNIFTY"
+        parts = signal.symbol.split("_")
+        base_symbol = parts[0] if parts else signal.symbol
         if base_symbol not in self.config.allowed_symbols:
             return False, f"Symbol {base_symbol} not in allowed symbols"
 

@@ -42,7 +42,6 @@ class ShortStraddle(BaseStrategy):
         self._pe_instrument: Optional[Dict] = None
         self._ce_filled: bool = False
         self._pe_filled: bool = False
-        self._legs_filled: int = 0
 
     def _is_within_trading_hours(self) -> bool:
         now = datetime.now(IST)

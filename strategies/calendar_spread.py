@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
+import inspect
 import structlog
 
 from strategies.base_strategy import BaseStrategy
@@ -54,7 +55,6 @@ class CalendarSpread(BaseStrategy):
         if not near_expiry:
             return
 
-        import inspect
         far_expiry = None
         sig = inspect.signature(self.instrument_manager.get_nearest_expiry)
         if "after" in sig.parameters:

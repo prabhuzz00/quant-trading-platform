@@ -90,11 +90,13 @@ class ButterflySpread(BaseStrategy):
         if not all([lower_ltp, atm_ltp, upper_ltp]):
             return []
 
-        debit = lower_ltp - (2 * atm_ltp) + upper_ltp
-        if debit >= 0:
+        # Net debit = cost of wings minus premium received for ATM shorts
+        debit = (lower_ltp + upper_ltp) - (2 * atm_ltp)
+        if debit <= 0:
+            # Mispriced or inverted - skip
             return []
 
-        net_debit = abs(debit)
+        net_debit = debit
         target = self.wing_width - net_debit
 
         signals = [
