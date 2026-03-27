@@ -42,6 +42,7 @@ class ShortStraddle(BaseStrategy):
         self._pe_instrument: Optional[Dict] = None
         self._ce_filled: bool = False
         self._pe_filled: bool = False
+        self._legs_filled: int = 0
 
     def _is_within_trading_hours(self) -> bool:
         now = datetime.now(IST)
@@ -133,7 +134,13 @@ class ShortStraddle(BaseStrategy):
 
     async def on_order_update(self, data: Dict[str, Any]) -> None:
         status = data.get("OrderStatus") or data.get("status", "")
+        symbol = data.get("symbol", "")
         if status in ("Filled", "FILLED"):
+            if symbol.endswith("_CE") or "CE" in str(data.get("TradingSymbol", "")):
+                self._ce_filled = True
+            elif symbol.endswith("_PE") or "PE" in str(data.get("TradingSymbol", "")):
+                self._pe_filled = True
             self._position_open = True
-        elif status in ("Cancelled", "REJECTED") and not (self._ce_filled and self._pe_filled):
-            self._position_open = False
+        elif status in ("Cancelled", "REJECTED"):
+            if not (self._ce_filled and self._pe_filled):
+                self._position_open = False

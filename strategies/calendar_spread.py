@@ -54,11 +54,13 @@ class CalendarSpread(BaseStrategy):
         if not near_expiry:
             return
 
+        import inspect
         far_expiry = None
-        try:
+        sig = inspect.signature(self.instrument_manager.get_nearest_expiry)
+        if "after" in sig.parameters:
             far_expiry = await self.instrument_manager.get_nearest_expiry(self.symbol, after=near_expiry)
-        except TypeError:
-            logger.warning("Calendar spread: cannot get second expiry, using near expiry for both legs")
+        else:
+            logger.warning("Calendar spread: get_nearest_expiry does not support 'after' param, using near expiry for far leg")
             far_expiry = near_expiry
 
         atm = self.instrument_manager.get_atm_strike(spot_price)
