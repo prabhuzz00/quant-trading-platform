@@ -89,32 +89,46 @@ class OrderManager:
             return uuid.uuid4().hex[:16]
 
         order_unique_id = uuid.uuid4().hex[:16]
-        order_params = {
-            "exchangeSegment": signal.exchange_segment,
-            "exchangeInstrumentID": signal.exchange_instrument_id,
-            "productType": self._get_product_type(signal.order_mode),
-            "orderType": "LIMIT" if signal.limit_price > 0 else "MARKET",
-            "orderSide": signal.action.value,
-            "timeInForce": "DAY",
-            "disclosedQuantity": 0,
-            "orderQuantity": signal.quantity,
-            "limitPrice": signal.limit_price,
-            "stopPrice": 0,
-            "orderUniqueIdentifier": order_unique_id,
-        }
+        product_type = self._get_product_type(signal.order_mode)
+        order_type = "LIMIT" if signal.limit_price > 0 else "MARKET"
 
         if signal.order_mode == OrderMode.BRACKET:
-            order_params.update({
-                "squarOff": signal.target_points,
-                "stopLossPrice": signal.stoploss_points,
-                "trailingStopLoss": signal.trailing_sl,
-            })
-            result = await self.xts_client.place_bracket_order(**order_params)
+            result = await self.xts_client.place_bracket_order(
+                exchange_segment=signal.exchange_segment,
+                exchange_instrument_id=signal.exchange_instrument_id,
+                order_side=signal.action.value,
+                order_quantity=signal.quantity,
+                limit_price=signal.limit_price,
+                squareoff=signal.target_points,
+                stop_loss_price=signal.stoploss_points,
+                trailing_stoploss=signal.trailing_sl,
+                product_type=product_type,
+                order_type=order_type,
+                order_unique_identifier=order_unique_id,
+            )
         elif signal.order_mode == OrderMode.COVER:
-            order_params["stopPrice"] = signal.stoploss_points
-            result = await self.xts_client.place_cover_order(**order_params)
+            result = await self.xts_client.place_cover_order(
+                exchange_segment=signal.exchange_segment,
+                exchange_instrument_id=signal.exchange_instrument_id,
+                order_side=signal.action.value,
+                order_quantity=signal.quantity,
+                limit_price=signal.limit_price,
+                stop_price=signal.stoploss_points,
+                product_type=product_type,
+                order_type=order_type,
+                order_unique_identifier=order_unique_id,
+            )
         else:
-            result = await self.xts_client.place_order(**order_params)
+            result = await self.xts_client.place_order(
+                exchange_segment=signal.exchange_segment,
+                exchange_instrument_id=signal.exchange_instrument_id,
+                order_side=signal.action.value,
+                order_quantity=signal.quantity,
+                limit_price=signal.limit_price,
+                product_type=product_type,
+                order_type=order_type,
+                order_unique_identifier=order_unique_id,
+            )
 
         logger.info("Order placed", order_unique_id=order_unique_id, symbol=signal.symbol)
         return order_unique_id
@@ -136,12 +150,11 @@ class OrderManager:
 
         try:
             if self.xts_client:
-                await self.xts_client.square_off_position(
+                await self.xts_client.squareoff_position(
                     exchange_segment=order_info["signal"].exchange_segment,
                     exchange_instrument_id=order_info["signal"].exchange_instrument_id,
                     product_type=self._get_product_type(order_info["signal"].order_mode),
-                    quantity=order_info["signal"].quantity,
-                    order_unique_id=trade_id,
+                    squareoff_qty_value=order_info["signal"].quantity,
                 )
             order_info["state"] = ORDER_CANCELLED
             await self._emit_audit("TRADE_SQUAREDOFF", {"trade_id": trade_id})
