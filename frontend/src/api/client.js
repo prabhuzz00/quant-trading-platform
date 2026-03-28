@@ -49,7 +49,7 @@ export const riskAPI = {
 
 export const strategiesAPI = {
   getAll: () => api.get('/strategies'),
-  toggle: (name) => api.put(`/strategies/${name}/toggle`),
+  toggle: (name, enabled) => api.put(`/strategies/${name}/toggle`, { enabled }),
   getPerformance: (name) => api.get(`/strategies/${name}/performance`),
 };
 
