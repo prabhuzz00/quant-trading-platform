@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from api.dependencies import app_state
 from api.routes import dashboard, positions, risk, strategies, trades
 from config.settings import settings
+from core.candle_store import CandleStore
 from core.event_bus import EventBus
 from core.market_data_socket import MarketDataSocket
 from core.order_socket import OrderSocket
@@ -32,14 +33,18 @@ from strategies.long_straddle import LongStraddle
 from strategies.protective_put import ProtectivePut
 from strategies.short_straddle import ShortStraddle
 from strategies.short_strangle import ShortStrangle
+from strategies.smc_confluence import SMCConfluenceStrategy
+from strategies.volume_breakout import VolumeBreakoutStrategy
 from strategies.strategy_registry import StrategyRegistry
 from engine.strategy_engine import StrategyEngine
+from engine.warmup import WarmupService
 
 logger = structlog.get_logger(__name__)
 
 
-def _build_strategy_registry() -> StrategyRegistry:
+def _build_strategy_registry(candle_store: CandleStore) -> StrategyRegistry:
     registry = StrategyRegistry()
+    # Multi-leg strategies (no historical data required)
     for cls in [
         IronCondor,
         ShortStraddle,
@@ -56,6 +61,18 @@ def _build_strategy_registry() -> StrategyRegistry:
             registry.register(cls())
         except (TypeError, ImportError, AttributeError) as exc:
             logger.warning("Failed to register strategy", cls=cls.__name__, error=str(exc))
+
+    # Single-leg strategies that need historical candles
+    for strategy in [
+        SMCConfluenceStrategy(),
+        VolumeBreakoutStrategy(),
+    ]:
+        strategy.candle_store = candle_store
+        try:
+            registry.register(strategy)
+        except (TypeError, ImportError, AttributeError) as exc:
+            logger.warning("Failed to register strategy", cls=type(strategy).__name__, error=str(exc))
+
     return registry
 
 
@@ -74,6 +91,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- Core infrastructure ---
     event_bus = EventBus()
     app_state["event_bus"] = event_bus
+
+    # --- Redis (optional; used for candle cache) ---
+    redis_client = None
+    if settings.redis_url:
+        try:
+            import redis.asyncio as aioredis
+            redis_client = aioredis.from_url(
+                settings.redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+            await redis_client.ping()
+            app_state["redis"] = redis_client
+            logger.info("Redis connected", url=settings.redis_url)
+        except Exception as exc:
+            logger.warning("Redis connection failed – candle cache disabled", error=str(exc))
+            redis_client = None
+
+    # --- Candle store (shared across all strategies needing history) ---
+    candle_store = CandleStore(
+        redis_client=redis_client,
+        cache_ttl=settings.candle_cache_ttl_seconds,
+        max_size=settings.candle_max_store_size,
+    )
+    app_state["candle_store"] = candle_store
 
     # --- XTS clients ---
     xts_market_data = XTSMarketDataClient(
@@ -180,13 +222,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     kill_switch.order_manager = order_manager
 
     # --- Strategy registry ---
-    strategy_registry = _build_strategy_registry()
+    strategy_registry = _build_strategy_registry(candle_store)
     app_state["strategy_registry"] = strategy_registry
+
+    # --- Historical candle warmup (non-fatal) ---
+    if xts_market_data.token:
+        warmup_service = WarmupService(
+            xts_client=xts_market_data,
+            candle_store=candle_store,
+        )
+        try:
+            await warmup_service.warmup_strategies(strategy_registry.get_all_strategies())
+        except Exception as exc:
+            logger.warning("Historical candle warmup encountered an error", error=str(exc))
+    else:
+        logger.info("Skipping historical candle warmup – XTS Market Data not authenticated")
 
     # --- Background tasks ---
     strategy_engine = StrategyEngine(
         event_bus=event_bus,
         strategy_registry=strategy_registry,
+        candle_store=candle_store,
     )
     app_state["strategy_engine"] = strategy_engine
     engine_task = asyncio.create_task(strategy_engine.start(), name="strategy_engine")
@@ -224,6 +280,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await xts_market_data.close()
     await xts_interactive.close()
+
+    if redis_client is not None:
+        try:
+            await redis_client.aclose()
+        except Exception:
+            pass
 
     await close_db()
     logger.info("Trading platform API shut down")

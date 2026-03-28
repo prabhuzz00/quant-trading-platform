@@ -37,5 +37,10 @@ class Settings(BaseSettings):
     default_max_daily_loss: float = 25000
     default_max_open_trades: int = 10
 
+    # Historical candle warm-up
+    candle_lookback_default: int = 100
+    candle_cache_ttl_seconds: int = 3600
+    candle_max_store_size: int = 500
+
 
 settings = Settings()
