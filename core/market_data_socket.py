@@ -75,6 +75,9 @@ class MarketDataSocket:
                 await self._handle_event(_evt, data)
             self._sio.on(event_name, handler)
 
+    # XTS socket events that carry completed candle (bar) data
+    _CANDLE_EVENTS = frozenset({"1505-json-full", "1505-json-partial"})
+
     async def _handle_event(self, event_name: str, data: Any):
         try:
             if isinstance(data, str):
@@ -82,12 +85,24 @@ class MarketDataSocket:
             else:
                 parsed = data
             event_type_name = SOCKET_EVENTS.get(event_name, "unknown")
-            tick_event = Event(
-                event_type=EventType.TICK,
-                data={"type": event_type_name, "event": event_name, "payload": parsed},
-                source="market_data_socket",
-            )
-            await self.event_bus.publish(tick_event)
+            payload = {"type": event_type_name, "event": event_name, "payload": parsed}
+
+            # Publish candle (bar) events on EventType.BAR so that the
+            # StrategyEngine can update the CandleStore and route to on_bar().
+            if event_name in self._CANDLE_EVENTS:
+                bar_event = Event(
+                    event_type=EventType.BAR,
+                    data=payload,
+                    source="market_data_socket",
+                )
+                await self.event_bus.publish(bar_event)
+            else:
+                tick_event = Event(
+                    event_type=EventType.TICK,
+                    data=payload,
+                    source="market_data_socket",
+                )
+                await self.event_bus.publish(tick_event)
         except Exception as e:
             logger.error("MarketDataSocket event handling error", event=event_name, error=str(e))
 
