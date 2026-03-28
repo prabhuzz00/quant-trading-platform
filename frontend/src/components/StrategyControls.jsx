@@ -52,14 +52,14 @@ export default function StrategyControls() {
 
   useEffect(() => { fetchStrategies(); }, [fetchStrategies]);
 
-  const handleToggle = async (name) => {
+  const handleToggle = async (name, currentEnabled) => {
     setToggling(name);
     try {
-      await strategiesAPI.toggle(name);
+      await strategiesAPI.toggle(name, !currentEnabled);
       setStrategies(prev =>
-        prev.map(s => s.name === name ? { ...s, enabled: !s.enabled } : s)
+        prev.map(s => s.name === name ? { ...s, enabled: !currentEnabled } : s)
       );
-      showToast(`${name} toggled.`);
+      showToast(`${name} ${!currentEnabled ? 'enabled' : 'disabled'}.`);
     } catch (e) {
       showToast(e.message, true);
     } finally {
@@ -71,7 +71,7 @@ export default function StrategyControls() {
     const targets = strategies.filter(s => s.enabled !== enable);
     for (const s of targets) {
       try {
-        await strategiesAPI.toggle(s.name);
+        await strategiesAPI.toggle(s.name, enable);
       } catch (_) {
         /* continue */
       }
@@ -164,7 +164,7 @@ export default function StrategyControls() {
                       type="checkbox"
                       checked={!!s.enabled}
                       disabled={toggling === s.name}
-                      onChange={() => handleToggle(s.name)}
+                      onChange={() => handleToggle(s.name, s.enabled)}
                     />
                     <span className="toggle-slider" />
                   </div>
