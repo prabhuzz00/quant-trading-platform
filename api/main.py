@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from api.dependencies import app_state
 from api.routes import dashboard, positions, risk, strategies, trades
+from api.routes import manual_trading
 from config.settings import settings
 from core.candle_store import CandleStore
 from core.event_bus import EventBus
@@ -36,6 +37,7 @@ from strategies.short_strangle import ShortStrangle
 from strategies.smc_confluence import SMCConfluenceStrategy
 from strategies.volume_breakout import VolumeBreakoutStrategy
 from strategies.strategy_registry import StrategyRegistry
+from engine.instrument_manager import InstrumentManager
 from engine.strategy_engine import StrategyEngine
 from engine.warmup import WarmupService
 
@@ -132,6 +134,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app_state["xts_market_data"] = xts_market_data
     app_state["xts_interactive"] = xts_interactive
+
+    # --- Instrument Manager (shared; used by manual trading & strategies) ---
+    instrument_manager = InstrumentManager(xts_market_data)
+    app_state["instrument_manager"] = instrument_manager
 
     # Attempt XTS login (non-fatal; platform still serves API without live data)
     md_token: str = ""
@@ -319,6 +325,7 @@ app.include_router(trades.router, prefix="/api")
 app.include_router(risk.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(positions.router, prefix="/api")
+app.include_router(manual_trading.router, prefix="/api")
 app.include_router(dashboard.router)  # WebSocket route mounts at /ws/dashboard
 
 

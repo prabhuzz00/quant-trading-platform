@@ -58,3 +58,8 @@ def get_market_data_socket():
 def get_order_socket():
     """Return the initialized OrderSocket singleton."""
     return app_state.get("order_socket")
+
+
+def get_instrument_manager():
+    """Return the initialized InstrumentManager singleton."""
+    return app_state["instrument_manager"]

@@ -7,9 +7,11 @@ import StrategyControls from './StrategyControls';
 import LivePnL from './LivePnL';
 import PositionViewer from './PositionViewer';
 import OrderBook from './OrderBook';
+import ManualTrading from './ManualTrading';
 
 const NAV_ITEMS = [
   { id: 'dashboard',   label: 'Dashboard',      icon: '📊' },
+  { id: 'manual',      label: 'Manual Trade',   icon: '🎯' },
   { id: 'open',        label: 'Open Trades',     icon: '📈' },
   { id: 'closed',      label: 'Closed Trades',   icon: '📉' },
   { id: 'risk',        label: 'Risk',            icon: '🛡️' },
@@ -76,6 +78,7 @@ export default function Dashboard() {
   function renderContent() {
     switch (activePage) {
       case 'dashboard':   return <LivePnL dashboardData={dashboardData} />;
+      case 'manual':      return <ManualTrading />;
       case 'open':        return <OpenTrades />;
       case 'closed':      return <ClosedTrades />;
       case 'risk':        return <RiskPanel />;

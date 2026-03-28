@@ -159,3 +159,61 @@ class KillSwitchRequest(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     code: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Manual trading schemas
+# ---------------------------------------------------------------------------
+
+class ExpiryListResponse(BaseModel):
+    symbol: str
+    expiries: List[str]
+
+
+class OptionChainRow(BaseModel):
+    strike: float
+    is_atm: bool = False
+    # Call side
+    ce_instrument_id: Optional[int] = None
+    ce_lot_size: Optional[int] = None
+    ce_ltp: Optional[float] = None
+    ce_bid: Optional[float] = None
+    ce_ask: Optional[float] = None
+    ce_oi: Optional[int] = None
+    ce_volume: Optional[int] = None
+    ce_change_pct: Optional[float] = None
+    # Put side
+    pe_instrument_id: Optional[int] = None
+    pe_lot_size: Optional[int] = None
+    pe_ltp: Optional[float] = None
+    pe_bid: Optional[float] = None
+    pe_ask: Optional[float] = None
+    pe_oi: Optional[int] = None
+    pe_volume: Optional[int] = None
+    pe_change_pct: Optional[float] = None
+
+
+class OptionChainResponse(BaseModel):
+    symbol: str
+    expiry: str
+    exchange_segment: str
+    spot_price: Optional[float] = None
+    atm_strike: Optional[float] = None
+    rows: List[OptionChainRow]
+
+
+class ManualOrderRequest(BaseModel):
+    exchange_segment: str = Field("NSEFO", description="Exchange segment, e.g. NSEFO")
+    exchange_instrument_id: int = Field(..., description="XTS instrument ID from the option chain")
+    order_side: str = Field(..., description="BUY or SELL")
+    quantity: int = Field(..., gt=0, description="Order quantity (absolute shares/contracts, not lots)")
+    product_type: str = Field("MIS", description="MIS or NRML")
+    order_type: str = Field("LIMIT", description="MARKET, LIMIT, SL, or SL-M")
+    time_in_force: str = Field("DAY", description="DAY or IOC")
+    limit_price: Optional[float] = Field(None, description="Limit price (required for LIMIT / SL orders)")
+    stop_price: Optional[float] = Field(None, description="Stop-loss trigger price (required for SL / SL-M orders)")
+
+
+class ManualOrderResponse(BaseModel):
+    order_id: str
+    message: str

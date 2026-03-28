@@ -59,3 +59,21 @@ export const positionsAPI = {
   getOrders: () => api.get('/positions/orders'),
   getTrades: () => api.get('/positions/trades'),
 };
+
+export const manualAPI = {
+  getExpiries: (symbol = 'NIFTY', exchangeSegment = 'NSEFO', series = 'OPTIDX') =>
+    api.get('/manual/expiries', { params: { symbol, exchange_segment: exchangeSegment, series } }),
+
+  getOptionChain: (symbol, expiry, { spotPrice, numStrikes = 10, exchangeSegment = 'NSEFO' } = {}) =>
+    api.get('/manual/option-chain', {
+      params: {
+        symbol,
+        expiry,
+        ...(spotPrice != null ? { spot_price: spotPrice } : {}),
+        num_strikes: numStrikes,
+        exchange_segment: exchangeSegment,
+      },
+    }),
+
+  placeOrder: (payload) => api.post('/manual/order', payload),
+};
