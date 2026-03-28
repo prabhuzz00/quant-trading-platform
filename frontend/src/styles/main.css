@@ -513,6 +513,9 @@ tbody td {
 }
 
 .form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -853,6 +856,85 @@ select.form-input option {
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ============================================================
+   Manual Trading – modal box, action buttons, alerts
+   ============================================================ */
+
+/* Order modal content box (uses existing .modal-overlay for backdrop) */
+.modal-box {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px 24px;
+  min-width: 340px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: var(--shadow-modal);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Buy / Sell full-width action buttons inside the modal */
+.btn-buy {
+  background-color: var(--color-profit);
+  color: #fff;
+  border-color: #059669;
+}
+.btn-buy:hover:not(:disabled) { background-color: #059669; }
+
+.btn-sell {
+  background-color: var(--color-loss);
+  color: #fff;
+  border-color: #dc2626;
+}
+.btn-sell:hover:not(:disabled) { background-color: #dc2626; }
+
+/* Compact B / S buttons in the option chain table */
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition);
+  line-height: 1;
+}
+.btn-action:hover { opacity: 0.8; }
+
+.btn-buy-sm  { background-color: var(--color-profit-bg); color: var(--color-profit); border-color: var(--color-profit); }
+.btn-sell-sm { background-color: var(--color-loss-bg);   color: var(--color-loss);   border-color: var(--color-loss); }
+
+/* Inline alert banners */
+.alert-error {
+  background-color: var(--color-loss-bg);
+  border: 1px solid var(--color-loss);
+  border-radius: var(--radius-sm);
+  color: var(--color-loss);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.alert-success {
+  background-color: var(--color-profit-bg);
+  border: 1px solid var(--color-profit);
+  border-radius: var(--radius-sm);
+  color: var(--color-profit);
+  padding: 8px 12px;
+  font-size: 13px;
+}
 
 /* ============================================================
    Utility
