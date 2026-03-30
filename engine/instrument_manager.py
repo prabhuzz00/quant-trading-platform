@@ -24,12 +24,30 @@ class InstrumentManager:
     async def get_expiry_dates(
         self, symbol: str, exchange_segment: str = "NSEFO", series: str = "OPTIDX"
     ) -> List[str]:
-        cache_key = f"{exchange_segment}:{symbol}"
+        """Return sorted unique expiry dates for *symbol* derived from the master file.
+
+        The XTS ``expiryDate`` endpoint is unreliable (returns 400 for many
+        broker configurations).  Instead we download the full instrument master
+        once (cached for 1 hour) and extract the distinct expiry dates that
+        match *symbol* and *series*.
+        """
+        cache_key = f"{exchange_segment}:{symbol}:{series}"
         if cache_key not in self._expiry_cache:
             try:
-                result = await self.market_client.get_expiry_dates(exchange_segment, series, symbol)
-                expiries = result.get("result", [])
-                self._expiry_cache[cache_key] = sorted(expiries)
+                await self.load_master(exchange_segment)
+                seen: set = set()
+                for inst in self._master_cache.get(exchange_segment, []):
+                    if inst.get("name") != symbol:
+                        continue
+                    if inst.get("series") != series:
+                        continue
+                    raw_exp = inst.get("contract_expiration", "").strip()
+                    if not raw_exp:
+                        continue
+                    seen.add(raw_exp)
+                # Sort chronologically using the normalised YYYY-MM-DD form
+                expiries = sorted(seen, key=lambda e: self._normalize_expiry(e))
+                self._expiry_cache[cache_key] = expiries
             except Exception as e:
                 logger.error("Failed to get expiry dates", symbol=symbol, error=str(e))
                 return []
@@ -179,3 +197,7 @@ class InstrumentManager:
         """Force a fresh master download on the next call."""
         self._master_loaded_at.pop(exchange_segment, None)
         self._master_cache.pop(exchange_segment, None)
+        # Expiry cache is derived from master data; clear stale entries too.
+        stale_keys = [k for k in self._expiry_cache if k.startswith(f"{exchange_segment}:")]
+        for k in stale_keys:
+            self._expiry_cache.pop(k, None)
