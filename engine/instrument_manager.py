@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
@@ -46,7 +47,8 @@ class InstrumentManager:
                         continue
                     # Normalise to YYYY-MM-DD to strip any time component and unify formats.
                     normalized = self._normalize_expiry(raw_exp)
-                    if normalized:
+                    # Only store valid YYYY-MM-DD dates; skip unparseable raw strings.
+                    if normalized and re.match(r'^\d{4}-\d{2}-\d{2}$', normalized):
                         seen.add(normalized)
                 # Sort chronologically using the normalised YYYY-MM-DD form
                 expiries = sorted(seen, key=lambda e: self._normalize_expiry(e))
@@ -149,7 +151,9 @@ class InstrumentManager:
                     "exchange_segment": parts[0],
                     "exchange_instrument_id": int(parts[1]),
                     "instrument_type": parts[2],
-                    "name": parts[3],
+                    # parts[3] may contain the full instrument name (e.g. "NIFTY 05MAY2026 CE 17550")
+                    # on some XTS broker instances; extract only the base underlying symbol.
+                    "name": parts[3].split()[0] if parts[3].split() else "",
                     "series": parts[5],
                     "display_name": parts[14] if len(parts) > 14 else "",
                     "lot_size": int(parts[12]) if parts[12].isdigit() else 1,
@@ -172,7 +176,9 @@ class InstrumentManager:
         """Normalise an expiry string to YYYY-MM-DD for comparison.
 
         Handles XTS master data formats that may include a time component,
-        e.g. "Apr 24 2025 12:00:00 AM", as well as plain date strings.
+        e.g. "Apr 24 2025 12:00:00 AM", milliseconds "Apr 24 2025 12:00:00:000AM",
+        as well as plain date strings and compound instrument names like
+        "NIFTY 05MAY2026 CE 17550" (extracts the embedded DDMMMYYYY component).
         """
         if not expiry_str:
             return ""
@@ -190,6 +196,26 @@ class InstrumentManager:
                 return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
             except ValueError:
                 continue
+
+        # Handle time component with milliseconds or no space before AM/PM,
+        # e.g. "Apr  5 2026 12:00:00:000AM" → strip time, parse date only.
+        date_part = re.sub(r'\s+\d{1,2}:\d{2}:\d{2}.*$', '', s).strip()
+        if date_part and date_part != s:
+            # Normalise consecutive spaces so both "Jan 30 2025" and "Jan  5 2025" use one format.
+            date_part_norm = re.sub(r'\s+', ' ', date_part)
+            try:
+                return datetime.strptime(date_part_norm, "%b %d %Y").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+        # Extract embedded DDMMMYYYY from compound strings like "NIFTY 05MAY2026 CE 17550".
+        m = re.search(r'\b(\d{1,2}[A-Za-z]{3}\d{4})\b', s)
+        if m:
+            try:
+                return datetime.strptime(m.group(1).upper(), "%d%b%Y").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
         return s
 
     async def get_option_chain_instruments(
