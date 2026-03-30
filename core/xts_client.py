@@ -158,7 +158,14 @@ class XTSMarketDataClient:
     async def get_quotes(self, instruments: List[Dict]) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        payload = {"instruments": instruments, "xtsMessageCode": 1512}
+        # XTS quotes API requires exchangeSegment as an integer code, not a string name.
+        converted = [
+            {**inst, "exchangeSegment": EXCHANGE_SEGMENTS.get(inst["exchangeSegment"], inst["exchangeSegment"])}
+            if isinstance(inst.get("exchangeSegment"), str)
+            else inst
+            for inst in instruments
+        ]
+        payload = {"instruments": converted, "xtsMessageCode": 1512}
         resp = await client.post(
             f"{self.url}/apimarketdata/instruments/quotes",
             json=payload,
