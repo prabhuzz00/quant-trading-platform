@@ -2,10 +2,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional
 import secrets
+from pathlib import Path
+
+# Resolve .env relative to this file so it always loads correctly regardless
+# of the working directory (e.g. uvicorn --reload spawns a subprocess whose
+# CWD may differ from the project root).
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    model_config = SettingsConfigDict(env_file=str(_ENV_FILE), env_file_encoding='utf-8', extra='ignore')
 
     # XTS Market Data
     xts_market_data_url: str = "https://developers.symphonyfintech.in"
@@ -18,6 +24,9 @@ class Settings(BaseSettings):
     xts_interactive_key: str = ""
     xts_interactive_secret: str = ""
     xts_interactive_source: str = "WebAPI"
+
+    # Set to False if the broker endpoint uses a self-signed / private CA certificate
+    xts_verify_ssl: bool = True
 
     # Database
     database_url: str = "postgresql+asyncpg://trader:trader123@localhost:5432/trading_db"

@@ -94,6 +94,7 @@ class InstrumentManager:
             return
         result = await self.market_client.get_master([exchange_segment])
         raw = result.get("result", "")
+
         if not isinstance(raw, str):
             logger.warning("Unexpected master data type", exchange_segment=exchange_segment, type=type(raw).__name__)
             raw = ""
@@ -133,13 +134,17 @@ class InstrumentManager:
                     "lot_size": int(parts[12]) if parts[12].isdigit() else 1,
                     "tick_size": float(parts[11]) if parts[11] else 0.05,
                 }
-                if len(parts) >= 22 and parts[5] in ("OPTIDX", "OPTSTK"):
-                    inst["contract_expiration"] = parts[19].strip()
+                if len(parts) >= 19 and parts[5] in ("OPTIDX", "OPTSTK"):
+                    inst["contract_expiration"] = parts[16].strip()
                     try:
-                        inst["strike_price"] = float(parts[20])
+                        inst["strike_price"] = float(parts[17])
                     except (ValueError, IndexError):
                         inst["strike_price"] = 0.0
-                    inst["option_type"] = parts[21].strip()
+                    # XTS numeric option types: 3=CE (Call), 4=PE (Put)
+                    raw_opt = parts[18].strip()
+                    inst["option_type"] = {"3": "CE", "4": "PE"}.get(raw_opt, raw_opt)
+                elif len(parts) >= 17 and parts[5] in ("FUTIDX", "FUTSTK"):
+                    inst["contract_expiration"] = parts[16].strip()
                 instruments.append(inst)
             except (ValueError, IndexError) as exc:
                 logger.debug("Skipping unparseable master row", error=str(exc))
@@ -150,7 +155,7 @@ class InstrumentManager:
         """Normalise an expiry string to YYYY-MM-DD for comparison."""
         if not expiry_str:
             return ""
-        for fmt in ("%b %d %Y", "%b  %d %Y", "%d%b%Y", "%Y-%m-%d", "%d-%b-%Y", "%d/%m/%Y"):
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%b %d %Y", "%b  %d %Y", "%d%b%Y", "%Y-%m-%d", "%d-%b-%Y", "%d/%m/%Y"):
             try:
                 return datetime.strptime(expiry_str.strip(), fmt).strftime("%Y-%m-%d")
             except ValueError:
@@ -167,13 +172,60 @@ class InstrumentManager:
         for inst in self._master_cache.get(exchange_segment, []):
             if inst.get("name") != symbol:
                 continue
-            if inst.get("series") not in ("OPTIDX", "OPTSTK"):
+            if inst.get("series") not in ("OPTIDX",):
                 continue
             if "option_type" not in inst:
                 continue
             if self._normalize_expiry(inst.get("contract_expiration", "")) == expiry_norm:
                 result.append(inst)
         return result
+
+    async def get_spot_price(self, symbol: str, exchange_segment: str = "NSEFO") -> Optional[float]:
+        """Fetch current spot price from the nearest-expiry futures instrument LTP.
+
+        Uses FUTIDX for index underlyings (NIFTY, BANKNIFTY, etc.) and FUTSTK
+        for stock futures.  Falls back to None if no futures instrument is found
+        or the quote call fails.
+        """
+        await self.load_master(exchange_segment)
+        today = datetime.now(timezone.utc).replace(tzinfo=None)
+        futures: List[tuple] = []
+        
+        for inst in self._master_cache.get(exchange_segment, []):
+            if inst.get("name") != symbol:
+                continue
+            if inst.get("instrument_type") != "1":  # 1=Futures, 2=Options in XTS master
+                continue
+            if inst.get("series") not in ("FUTIDX",):
+                continue
+
+            norm = self._normalize_expiry(inst.get("contract_expiration", ""))
+            if norm:
+                try:
+                    exp_dt = datetime.strptime(norm, "%Y-%m-%d")
+                    futures.append((exp_dt, inst))
+                except ValueError:
+                    pass
+        if not futures:
+            logger.warning("No futures instrument found for spot price", symbol=symbol)
+            return None
+        futures.sort(key=lambda x: x[0])
+        nearest = futures[0][1]
+        try:
+            import json as _json
+            refs = [{"exchangeSegment": exchange_segment, "exchangeInstrumentID": nearest["exchange_instrument_id"]}]
+            quotes = await self.market_client.get_quotes(refs)
+            raw_list = (quotes.get("result") or {}).get("listQuotes") or []
+            if raw_list:
+                quote = _json.loads(raw_list[0]) if isinstance(raw_list[0], str) else raw_list[0]
+                ltp = quote.get("Touchline", {}).get("LastTradedPrice")
+                if ltp is not None:
+                    logger.info("Spot price fetched from futures", symbol=symbol,
+                                futures_id=nearest["exchange_instrument_id"], ltp=ltp)
+                    return float(ltp)
+        except Exception as exc:
+            logger.warning("Failed to fetch spot price from futures", symbol=symbol, error=str(exc))
+        return None
 
     async def invalidate_master_cache(self, exchange_segment: str = "NSEFO") -> None:
         """Force a fresh master download on the next call."""

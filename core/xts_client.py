@@ -45,11 +45,12 @@ class RateLimiter:
 
 
 class XTSMarketDataClient:
-    def __init__(self, url: str, app_key: str, secret_key: str, source: str = "WebAPI"):
+    def __init__(self, url: str, app_key: str, secret_key: str, source: str = "WebAPI", verify_ssl: bool = True):
         self.url = url.rstrip("/")
         self.app_key = app_key
         self.secret_key = secret_key
         self.source = source
+        self.verify_ssl = verify_ssl
         self.token: Optional[str] = None
         self.user_id: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
@@ -58,7 +59,7 @@ class XTSMarketDataClient:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=30.0)
+            self._client = httpx.AsyncClient(timeout=30.0, verify=self.verify_ssl)
         return self._client
 
     def _headers(self) -> Dict[str, str]:
@@ -125,7 +126,9 @@ class XTSMarketDataClient:
     async def get_expiry_dates(self, exchange_segment: str, series: str, symbol: str) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        params = {"exchangeSegment": exchange_segment, "series": series, "symbol": symbol}
+        # This broker requires numeric segment IDs for this endpoint
+        seg_id = EXCHANGE_SEGMENTS.get(exchange_segment, exchange_segment)
+        params = {"exchangeSegment": seg_id, "series": series, "symbol": symbol}
         resp = await client.get(
             f"{self.url}/apimarketdata/instruments/instrument/expiryDate",
             params=params,
@@ -158,7 +161,13 @@ class XTSMarketDataClient:
     async def get_quotes(self, instruments: List[Dict]) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        payload = {"instruments": instruments, "xtsMessageCode": 1512}
+        # Convert string segment names to numeric IDs; broker requires numeric + publishFormat
+        converted = []
+        for inst in instruments:
+            seg = inst.get("exchangeSegment")
+            seg_id = EXCHANGE_SEGMENTS.get(seg, seg) if isinstance(seg, str) else seg
+            converted.append({**inst, "exchangeSegment": seg_id})
+        payload = {"instruments": converted, "xtsMessageCode": 1502, "publishFormat": "JSON"}
         resp = await client.post(
             f"{self.url}/apimarketdata/instruments/quotes",
             json=payload,
@@ -203,11 +212,12 @@ class XTSMarketDataClient:
 
 
 class XTSInteractiveClient:
-    def __init__(self, url: str, app_key: str, secret_key: str, source: str = "WebAPI"):
+    def __init__(self, url: str, app_key: str, secret_key: str, source: str = "WebAPI", verify_ssl: bool = True):
         self.url = url.rstrip("/")
         self.app_key = app_key
         self.secret_key = secret_key
         self.source = source
+        self.verify_ssl = verify_ssl
         self.token: Optional[str] = None
         self.user_id: Optional[str] = None
         self._client: Optional[httpx.AsyncClient] = None
@@ -216,7 +226,7 @@ class XTSInteractiveClient:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=30.0)
+            self._client = httpx.AsyncClient(timeout=30.0, verify=self.verify_ssl)
         return self._client
 
     def _headers(self) -> Dict[str, str]:

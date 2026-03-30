@@ -125,12 +125,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app_key=settings.xts_market_data_key,
         secret_key=settings.xts_market_data_secret,
         source=settings.xts_market_data_source,
+        verify_ssl=settings.xts_verify_ssl,
     )
     xts_interactive = XTSInteractiveClient(
         url=settings.xts_interactive_url,
         app_key=settings.xts_interactive_key,
         secret_key=settings.xts_interactive_secret,
         source=settings.xts_interactive_source,
+        verify_ssl=settings.xts_verify_ssl,
     )
     app_state["xts_market_data"] = xts_market_data
     app_state["xts_interactive"] = xts_interactive

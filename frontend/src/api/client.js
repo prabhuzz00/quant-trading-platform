@@ -64,12 +64,11 @@ export const manualAPI = {
   getExpiries: (symbol = 'NIFTY', exchangeSegment = 'NSEFO', series = 'OPTIDX') =>
     api.get('/manual/expiries', { params: { symbol, exchange_segment: exchangeSegment, series } }),
 
-  getOptionChain: (symbol, expiry, { spotPrice, numStrikes = 10, exchangeSegment = 'NSEFO' } = {}) =>
+  getOptionChain: (symbol, expiry, { numStrikes = 10, exchangeSegment = 'NSEFO' } = {}) =>
     api.get('/manual/option-chain', {
       params: {
         symbol,
         expiry,
-        ...(spotPrice != null ? { spot_price: spotPrice } : {}),
         num_strikes: numStrikes,
         exchange_segment: exchangeSegment,
       },
