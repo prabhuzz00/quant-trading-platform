@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { manualAPI } from '../api/client';
+import { manualAPI, createOptionChainWebSocket } from '../api/client';
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -186,23 +186,40 @@ export default function ManualTrading() {
   const [symbol, setSymbol]           = useState('NIFTY');
   const [expiries, setExpiries]       = useState([]);
   const [selectedExpiry, setSelectedExpiry] = useState('');
-  const [spotPrice, setSpotPrice]     = useState('');
   const [numStrikes, setNumStrikes]   = useState(10);
   const [chain, setChain]             = useState(null);
   const [loadingExpiries, setLoadingExpiries] = useState(false);
-  const [loadingChain, setLoadingChain]       = useState(false);
   const [expiriesError, setExpiriesError]     = useState(null);
   const [chainError, setChainError]           = useState(null);
+  const [wsStatus, setWsStatus]       = useState('idle'); // 'idle' | 'connecting' | 'live' | 'error'
   const [modal, setModal]             = useState(null); // {side, row, optType}
   const [orderSuccess, setOrderSuccess] = useState(null);
 
+  const wsRef        = useRef(null);
+
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
+
+  const closeWs = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.onclose = null; // prevent reconnect loop
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  // ------------------------------------------------------------------
   // Fetch expiries whenever symbol changes
+  // ------------------------------------------------------------------
   const fetchExpiries = useCallback(async (sym) => {
     setLoadingExpiries(true);
     setExpiriesError(null);
     setExpiries([]);
     setSelectedExpiry('');
     setChain(null);
+    closeWs();
+    setWsStatus('idle');
     try {
       const data = await manualAPI.getExpiries(sym);
       const list = data?.expiries ?? [];
@@ -213,29 +230,60 @@ export default function ManualTrading() {
     } finally {
       setLoadingExpiries(false);
     }
-  }, []);
+  }, [closeWs]);
 
   useEffect(() => {
     fetchExpiries(symbol);
   }, [symbol, fetchExpiries]);
 
-  const loadChain = useCallback(async () => {
-    if (!selectedExpiry) return;
-    setLoadingChain(true);
+  // ------------------------------------------------------------------
+  // Open / re-open WebSocket whenever symbol, expiry, or numStrikes change
+  // ------------------------------------------------------------------
+  const connectWs = useCallback((sym, expiry, strikes) => {
+    closeWs();
+    if (!expiry) return;
+
+    setWsStatus('connecting');
     setChainError(null);
-    setChain(null);
-    try {
-      const data = await manualAPI.getOptionChain(symbol, selectedExpiry, {
-        spotPrice: spotPrice ? parseFloat(spotPrice) : undefined,
-        numStrikes,
-      });
-      setChain(data);
-    } catch (err) {
-      setChainError(err.message);
-    } finally {
-      setLoadingChain(false);
+
+    const ws = createOptionChainWebSocket(
+      { symbol: sym, expiry, numStrikes: strikes },
+      (data) => {
+        if (data.error) {
+          setChainError(data.error);
+          setWsStatus('error');
+          return;
+        }
+        setChain(data);
+        setWsStatus('live');
+        setChainError(null);
+      },
+      (err) => {
+        console.error('WS option-chain error', err);
+        setWsStatus('error');
+        setChainError('WebSocket connection error. Check the console for details.');
+      },
+      () => {
+        // Socket closed – reset to idle so the user can reconnect
+        setWsStatus('idle');
+      },
+    );
+
+    wsRef.current = ws;
+  }, [closeWs]);
+
+  useEffect(() => {
+    if (selectedExpiry) {
+      connectWs(symbol, selectedExpiry, numStrikes);
     }
-  }, [symbol, selectedExpiry, spotPrice, numStrikes]);
+    return () => closeWs();
+    // Only reconnect when selectedExpiry changes (fetchExpiries resets it on symbol change,
+    // so symbol is transitively covered). numStrikes reconnect is manual via the Reconnect button.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedExpiry]);
+
+  // Cleanup on unmount
+  useEffect(() => () => closeWs(), [closeWs]);
 
   function openModal(side, row, optType) {
     const instId = optType === 'CE' ? row.ce_instrument_id : row.pe_instrument_id;
@@ -251,6 +299,16 @@ export default function ManualTrading() {
   }
 
   const atm = chain?.atm_strike;
+
+  // ------------------------------------------------------------------
+  // Status badge helpers
+  // ------------------------------------------------------------------
+  const statusBadge = {
+    idle:       { label: 'Idle',        color: 'var(--text-muted)' },
+    connecting: { label: 'Connecting…', color: 'var(--color-yellow)' },
+    live:       { label: '● LIVE',      color: 'var(--color-profit)' },
+    error:      { label: 'Error',       color: 'var(--color-loss)' },
+  }[wsStatus] ?? { label: wsStatus, color: 'var(--text-muted)' };
 
   return (
     <div>
@@ -297,17 +355,15 @@ export default function ManualTrading() {
             </select>
           </label>
 
-          {/* Spot price */}
+          {/* Spot price (auto-fetched, read-only) */}
           <label className="form-label" style={{ minWidth: 130 }}>
             Spot Price (₹)
             <input
               className="form-input"
-              type="number"
-              step="0.5"
-              min={0}
-              placeholder="e.g. 22150"
-              value={spotPrice}
-              onChange={(e) => setSpotPrice(e.target.value)}
+              type="text"
+              readOnly
+              value={chain?.spot_price != null ? fmtPrice(chain.spot_price) : '—'}
+              style={{ background: 'var(--bg-tertiary)', cursor: 'default', color: 'var(--text-secondary)' }}
             />
           </label>
 
@@ -324,14 +380,20 @@ export default function ManualTrading() {
             />
           </label>
 
+          {/* Reconnect / Refresh button */}
           <button
             className="btn btn-primary"
-            onClick={loadChain}
-            disabled={loadingChain || !selectedExpiry}
+            onClick={() => connectWs(symbol, selectedExpiry, numStrikes)}
+            disabled={wsStatus === 'connecting' || !selectedExpiry}
             style={{ alignSelf: 'flex-end', marginBottom: 0 }}
           >
-            {loadingChain ? '⟳ Loading…' : '⟳ Load Chain'}
+            {wsStatus === 'connecting' ? '⟳ Connecting…' : '⟳ Reconnect'}
           </button>
+
+          {/* Live status indicator */}
+          <span style={{ alignSelf: 'flex-end', marginBottom: 6, fontSize: 12, fontWeight: 600, color: statusBadge.color }}>
+            {statusBadge.label}
+          </span>
         </div>
 
         {expiriesError && (
@@ -354,21 +416,27 @@ export default function ManualTrading() {
           <div className="state-box-icon">⚠️</div>
           <div className="state-box-text">Failed to load option chain</div>
           <div className="state-box-sub">{chainError}</div>
-          <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={loadChain}>Retry</button>
+          <button
+            className="btn btn-ghost"
+            style={{ marginTop: 12 }}
+            onClick={() => connectWs(symbol, selectedExpiry, numStrikes)}
+          >
+            Retry
+          </button>
         </div>
       )}
 
-      {/* Loading spinner */}
-      {loadingChain && (
+      {/* Connecting spinner – shown while waiting for the first live payload */}
+      {wsStatus === 'connecting' && !chain && (
         <div className="state-box">
           <div className="spinner" />
-          <div className="state-box-text">Fetching option chain…</div>
-          <div className="state-box-sub">Downloading master data and live quotes</div>
+          <div className="state-box-text">Connecting to live feed…</div>
+          <div className="state-box-sub">Spot price and option prices are fetched automatically from XTS.</div>
         </div>
       )}
 
       {/* Option Chain Table */}
-      {!loadingChain && !chainError && chain && (
+      {!chainError && chain && (
         <>
           <div style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: 12 }}>
             <strong>{chain.symbol}</strong> · {chain.expiry}
@@ -517,14 +585,12 @@ export default function ManualTrading() {
         </>
       )}
 
-      {/* Empty state before first load */}
-      {!loadingChain && !chainError && !chain && selectedExpiry && (
+
+      {wsStatus === 'idle' && !chain && !chainError && selectedExpiry && (
         <div className="state-box">
           <div className="state-box-icon">📊</div>
-          <div className="state-box-text">Select an expiry and click Load Chain</div>
-          <div className="state-box-sub">
-            Optionally enter the current spot price to center the chain around ATM.
-          </div>
+          <div className="state-box-text">Select an expiry to start live feed</div>
+          <div className="state-box-sub">Spot price and expiry are fetched automatically from XTS.</div>
         </div>
       )}
 
@@ -541,3 +607,4 @@ export default function ManualTrading() {
     </div>
   );
 }
+

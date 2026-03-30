@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from api.dependencies import app_state
 from api.routes import dashboard, positions, risk, strategies, trades
 from api.routes import manual_trading
+from api.routes import ws as ws_routes
 from config.settings import settings
 from core.candle_store import CandleStore
 from core.event_bus import EventBus
@@ -326,7 +327,8 @@ app.include_router(risk.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(positions.router, prefix="/api")
 app.include_router(manual_trading.router, prefix="/api")
-app.include_router(dashboard.router)  # WebSocket route mounts at /ws/dashboard
+app.include_router(dashboard.router)   # WebSocket route at /ws/dashboard
+app.include_router(ws_routes.router)   # WebSocket routes at /ws/...
 
 
 # ---------------------------------------------------------------------------

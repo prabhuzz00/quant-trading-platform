@@ -64,6 +64,9 @@ export const manualAPI = {
   getExpiries: (symbol = 'NIFTY', exchangeSegment = 'NSEFO', series = 'OPTIDX') =>
     api.get('/manual/expiries', { params: { symbol, exchange_segment: exchangeSegment, series } }),
 
+  getSpotPrice: (symbol = 'NIFTY') =>
+    api.get('/manual/spot-price', { params: { symbol } }),
+
   getOptionChain: (symbol, expiry, { spotPrice, numStrikes = 10, exchangeSegment = 'NSEFO' } = {}) =>
     api.get('/manual/option-chain', {
       params: {
@@ -76,4 +79,49 @@ export const manualAPI = {
     }),
 
   placeOrder: (payload) => api.post('/manual/order', payload),
+};
+
+/**
+ * Open a WebSocket that streams live option-chain updates every second.
+ *
+ * @param {object} params
+ * @param {string} params.symbol          - e.g. 'NIFTY'
+ * @param {string} params.expiry          - expiry string from /api/manual/expiries
+ * @param {number} [params.numStrikes=10] - strikes on each side of ATM
+ * @param {string} [params.exchangeSegment='NSEFO']
+ * @param {function} onMessage  - called with the parsed chain payload on every tick
+ * @param {function} onError    - called on WebSocket error
+ * @param {function} [onClose]  - called when the socket closes
+ * @returns {WebSocket}
+ */
+export const createOptionChainWebSocket = (
+  { symbol, expiry, numStrikes = 10, exchangeSegment = 'NSEFO' },
+  onMessage,
+  onError,
+  onClose,
+) => {
+  const query = new URLSearchParams({
+    symbol,
+    expiry,
+    num_strikes: String(numStrikes),
+    exchange_segment: exchangeSegment,
+  });
+  const ws = new WebSocket(`${WS_BASE}/option-chain?${query.toString()}`);
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      onMessage(data);
+    } catch (e) {
+      console.error('WS option-chain parse error:', e);
+    }
+  };
+
+  ws.onerror = onError;
+
+  ws.onclose = (event) => {
+    if (onClose) onClose(event);
+  };
+
+  return ws;
 };

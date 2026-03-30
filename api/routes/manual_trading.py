@@ -11,12 +11,22 @@ from api.schemas import (
     ManualOrderResponse,
     OptionChainResponse,
     OptionChainRow,
+    SpotPriceResponse,
 )
 from engine.instrument_manager import InstrumentManager
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/manual", tags=["manual-trading"])
+
+# Standard XTS instrument IDs for NSE index underlyings (NSECM segment).
+# These are stable across XTS broker instances for NSE cash-market indices.
+_INDEX_INSTRUMENTS: Dict[str, Dict] = {
+    "NIFTY":      {"exchangeSegment": "NSECM", "exchangeInstrumentID": 26000},
+    "BANKNIFTY":  {"exchangeSegment": "NSECM", "exchangeInstrumentID": 26009},
+    "FINNIFTY":   {"exchangeSegment": "NSECM", "exchangeInstrumentID": 26037},
+    "MIDCPNIFTY": {"exchangeSegment": "NSECM", "exchangeInstrumentID": 26121},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +103,36 @@ async def get_expiries(
     if not expiries:
         raise HTTPException(status_code=404, detail=f"No expiry dates found for {symbol}")
     return ExpiryListResponse(symbol=symbol, expiries=expiries)
+
+
+@router.get("/spot-price", response_model=SpotPriceResponse, summary="Fetch live underlying spot price")
+async def get_spot_price(
+    symbol: str = Query("NIFTY", description="Underlying symbol (e.g. NIFTY, BANKNIFTY)"),
+    market_data=Depends(get_xts_market_data),
+) -> SpotPriceResponse:
+    """Return the live LTP of the underlying index for *symbol* from XTS NSECM."""
+    index_inst = _INDEX_INSTRUMENTS.get(symbol.upper())
+    if not index_inst:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No index instrument mapping for '{symbol}'. "
+                   f"Supported: {', '.join(_INDEX_INSTRUMENTS)}",
+        )
+    try:
+        result = await market_data.get_quotes([index_inst])
+        quotes = (result.get("result") or {}).get("listQuotes") or []
+    except Exception as exc:
+        logger.error("Spot price fetch failed", symbol=symbol, error=str(exc))
+        raise HTTPException(status_code=502, detail=f"Failed to fetch spot price: {exc}") from exc
+
+    if not quotes:
+        raise HTTPException(status_code=502, detail=f"No quote returned for {symbol} index")
+
+    ltp = _get_ltp(quotes[0])
+    if ltp is None:
+        raise HTTPException(status_code=502, detail=f"LTP unavailable for {symbol} index")
+
+    return SpotPriceResponse(symbol=symbol, spot_price=ltp)
 
 
 @router.get("/option-chain", response_model=OptionChainResponse, summary="Fetch Nifty option chain")
