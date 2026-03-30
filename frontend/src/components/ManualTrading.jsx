@@ -28,6 +28,19 @@ function fmtChange(v) {
   return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
 }
 
+/**
+ * Format an expiry string from the backend (YYYY-MM-DD or legacy "Mmm DD YYYY")
+ * into a compact human-readable label like "24 Apr 2025".
+ */
+function fmtExpiry(exp) {
+  if (!exp) return exp;
+  // Append time only for ISO YYYY-MM-DD strings to avoid timezone-shifting in Date constructor.
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(exp) ? exp + 'T00:00:00' : exp;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return exp;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 // ---------------------------------------------------------------------------
 // Order Modal
 // ---------------------------------------------------------------------------
@@ -350,7 +363,7 @@ export default function ManualTrading() {
               {loadingExpiries && <option>Loading…</option>}
               {expiriesError && <option>Error loading</option>}
               {expiries.map((exp) => (
-                <option key={exp} value={exp}>{exp}</option>
+                <option key={exp} value={exp}>{fmtExpiry(exp)}</option>
               ))}
             </select>
           </label>
@@ -439,7 +452,7 @@ export default function ManualTrading() {
       {!chainError && chain && (
         <>
           <div style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: 12 }}>
-            <strong>{chain.symbol}</strong> · {chain.expiry}
+            <strong>{chain.symbol}</strong> · {fmtExpiry(chain.expiry)}
             {chain.atm_strike != null && (
               <> · ATM <strong style={{ color: 'var(--color-yellow)' }}>₹{chain.atm_strike.toLocaleString('en-IN')}</strong></>
             )}

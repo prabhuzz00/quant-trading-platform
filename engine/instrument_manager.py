@@ -44,7 +44,10 @@ class InstrumentManager:
                     raw_exp = inst.get("contract_expiration", "").strip()
                     if not raw_exp:
                         continue
-                    seen.add(raw_exp)
+                    # Normalise to YYYY-MM-DD to strip any time component and unify formats.
+                    normalized = self._normalize_expiry(raw_exp)
+                    if normalized:
+                        seen.add(normalized)
                 # Sort chronologically using the normalised YYYY-MM-DD form
                 expiries = sorted(seen, key=lambda e: self._normalize_expiry(e))
                 self._expiry_cache[cache_key] = expiries
@@ -57,8 +60,9 @@ class InstrumentManager:
         expiries = await self.get_expiry_dates(symbol)
         today = datetime.now(timezone.utc).replace(tzinfo=None)
         for exp in expiries:
+            norm = self._normalize_expiry(exp)
             try:
-                exp_date = datetime.strptime(exp, "%b %d %Y")
+                exp_date = datetime.strptime(norm, "%Y-%m-%d")
                 if exp_date >= today:
                     return exp
             except (ValueError, AttributeError):
@@ -165,15 +169,28 @@ class InstrumentManager:
 
     @staticmethod
     def _normalize_expiry(expiry_str: str) -> str:
-        """Normalise an expiry string to YYYY-MM-DD for comparison."""
+        """Normalise an expiry string to YYYY-MM-DD for comparison.
+
+        Handles XTS master data formats that may include a time component,
+        e.g. "Apr 24 2025 12:00:00 AM", as well as plain date strings.
+        """
         if not expiry_str:
             return ""
-        for fmt in ("%b %d %Y", "%b  %d %Y", "%d%b%Y", "%Y-%m-%d", "%d-%b-%Y", "%d/%m/%Y"):
+        s = expiry_str.strip()
+        for fmt in (
+            "%b %d %Y %I:%M:%S %p",  # "Apr 24 2025 12:00:00 AM" (XTS master with time)
+            "%b %d %Y",               # "Jan 30 2025"
+            "%b  %d %Y",              # "Jan  30 2025" (double space)
+            "%d%b%Y",                 # "30Jan2025"
+            "%Y-%m-%d",               # "2025-01-30"
+            "%d-%b-%Y",               # "30-Jan-2025"
+            "%d/%m/%Y",               # "30/01/2025"
+        ):
             try:
-                return datetime.strptime(expiry_str.strip(), fmt).strftime("%Y-%m-%d")
+                return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
             except ValueError:
                 continue
-        return expiry_str.strip()
+        return s
 
     async def get_option_chain_instruments(
         self, symbol: str, expiry_date: str, exchange_segment: str = "NSEFO"
