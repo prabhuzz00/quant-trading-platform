@@ -177,8 +177,9 @@ class InstrumentManager:
 
         Handles XTS master data formats that may include a time component,
         e.g. "Apr 24 2025 12:00:00 AM", milliseconds "Apr 24 2025 12:00:00:000AM",
-        as well as plain date strings and compound instrument names like
-        "NIFTY 05MAY2026 CE 17550" (extracts the embedded DDMMMYYYY component).
+        ISO datetime "2025-01-30 00:00:00", as well as plain date strings and
+        compound instrument names like "NIFTY 05MAY2026 CE 17550" (extracts the
+        embedded DDMMMYYYY component).
         """
         if not expiry_str:
             return ""
@@ -188,6 +189,8 @@ class InstrumentManager:
             "%b %d %Y",               # "Jan 30 2025"
             "%b  %d %Y",              # "Jan  30 2025" (double space)
             "%d%b%Y",                 # "30Jan2025"
+            "%Y-%m-%d %H:%M:%S",      # "2025-01-30 00:00:00" (ISO datetime)
+            "%Y-%m-%dT%H:%M:%S",      # "2025-01-30T00:00:00" (ISO with T separator)
             "%Y-%m-%d",               # "2025-01-30"
             "%d-%b-%Y",               # "30-Jan-2025"
             "%d/%m/%Y",               # "30/01/2025"
@@ -203,10 +206,11 @@ class InstrumentManager:
         if date_part and date_part != s:
             # Normalise consecutive spaces so both "Jan 30 2025" and "Jan  5 2025" use one format.
             date_part_norm = re.sub(r'\s+', ' ', date_part)
-            try:
-                return datetime.strptime(date_part_norm, "%b %d %Y").strftime("%Y-%m-%d")
-            except ValueError:
-                pass
+            for fmt2 in ("%b %d %Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(date_part_norm, fmt2).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
 
         # Extract embedded DDMMMYYYY from compound strings like "NIFTY 05MAY2026 CE 17550".
         m = re.search(r'\b(\d{1,2}[A-Za-z]{3}\d{4})\b', s)

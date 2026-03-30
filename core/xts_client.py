@@ -68,6 +68,13 @@ class XTSMarketDataClient:
         return headers
 
     def _handle_response(self, resp: httpx.Response) -> Dict:
+        if resp.is_error:
+            logger.warning(
+                "XTS API error response",
+                status_code=resp.status_code,
+                url=str(resp.url),
+                body=resp.text[:500],
+            )
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict) and data.get("type") == "error":
@@ -165,7 +172,9 @@ class XTSMarketDataClient:
             else inst
             for inst in instruments
         ]
-        payload = {"instruments": converted, "xtsMessageCode": 1512}
+        # xtsMessageCode 1502 = TouchlineData (LTP, bid, ask, volume, OI).
+        # 1512 is a socket-only subscription code and is rejected by the REST endpoint.
+        payload = {"instruments": converted, "xtsMessageCode": 1502}
         resp = await client.post(
             f"{self.url}/apimarketdata/instruments/quotes",
             json=payload,
@@ -233,6 +242,13 @@ class XTSInteractiveClient:
         return headers
 
     def _handle_response(self, resp: httpx.Response) -> Dict:
+        if resp.is_error:
+            logger.warning(
+                "XTS API error response",
+                status_code=resp.status_code,
+                url=str(resp.url),
+                body=resp.text[:500],
+            )
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict) and data.get("type") == "error":
