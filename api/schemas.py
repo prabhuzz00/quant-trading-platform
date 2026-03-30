@@ -170,6 +170,11 @@ class ExpiryListResponse(BaseModel):
     expiries: List[str]
 
 
+class SpotPriceResponse(BaseModel):
+    symbol: str
+    spot_price: float
+
+
 class OptionChainRow(BaseModel):
     strike: float
     is_atm: bool = False
