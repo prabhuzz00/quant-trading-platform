@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createDashboardWebSocket } from '../api/client';
 import OpenTrades from './OpenTrades';
 import ClosedTrades from './ClosedTrades';
 import RiskPanel from './RiskPanel';
 import StrategyControls from './StrategyControls';
+import StrategyDetail from './StrategyDetail';
 import LivePnL from './LivePnL';
 import PositionViewer from './PositionViewer';
 import OrderBook from './OrderBook';
@@ -34,6 +34,7 @@ function fmt(val, decimals = 2) {
 
 export default function Dashboard() {
   const [activePage, setActivePage] = useState('dashboard');
+  const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef(null);
@@ -82,14 +83,23 @@ export default function Dashboard() {
       case 'open':        return <OpenTrades />;
       case 'closed':      return <ClosedTrades />;
       case 'risk':        return <RiskPanel />;
-      case 'strategies':  return <StrategyControls />;
+      case 'strategies':
+        return selectedStrategy
+          ? <StrategyDetail
+              strategyName={selectedStrategy.name}
+              strategyInfo={selectedStrategy}
+              onBack={() => setSelectedStrategy(null)}
+            />
+          : <StrategyControls onSelectStrategy={setSelectedStrategy} />;
       case 'positions':   return <PositionViewer />;
       case 'orders':      return <OrderBook />;
       default:            return <LivePnL dashboardData={dashboardData} />;
     }
   }
 
-  const activeLabel = NAV_ITEMS.find(n => n.id === activePage)?.label || 'Dashboard';
+  const activeLabel = selectedStrategy && activePage === 'strategies'
+    ? selectedStrategy.name
+    : NAV_ITEMS.find(n => n.id === activePage)?.label || 'Dashboard';
 
   return (
     <div className="app-layout">
@@ -108,7 +118,10 @@ export default function Dashboard() {
             <button
               key={item.id}
               className={`nav-item${activePage === item.id ? ' active' : ''}`}
-              onClick={() => setActivePage(item.id)}
+              onClick={() => {
+                setActivePage(item.id);
+                if (item.id !== 'strategies') setSelectedStrategy(null);
+              }}
             >
               <span className="nav-item-icon">{item.icon}</span>
               {item.label}

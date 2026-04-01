@@ -25,7 +25,7 @@ const STRATEGY_DESCRIPTIONS = {
   options_writer:      'Systematic premium collection via credit spreads.',
 };
 
-export default function StrategyControls() {
+export default function StrategyControls({ onSelectStrategy }) {
   const [strategies, setStrategies]       = useState([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState(null);
@@ -224,6 +224,17 @@ export default function StrategyControls() {
                   </div>
                 )}
               </div>
+              {onSelectStrategy && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ width: '100%' }}
+                    onClick={() => onSelectStrategy(s)}
+                  >
+                    View Details →
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
