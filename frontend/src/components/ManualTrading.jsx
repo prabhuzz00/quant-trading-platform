@@ -304,8 +304,6 @@ export default function ManualTrading() {
     setTimeout(() => setOrderSuccess(null), 6000);
   }
 
-  const atm = chain?.atm_strike;
-
   return (
     <div>
       {/* Page header */}
