@@ -29,7 +29,7 @@ class IronCondor(BaseStrategy):
         wing_width: float = 100.0,
         sl_multiplier: float = 2.0,
         target_pct: float = 0.50,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager

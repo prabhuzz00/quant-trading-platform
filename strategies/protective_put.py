@@ -26,7 +26,7 @@ class ProtectivePut(BaseStrategy):
         otm_points: float = 0.0,
         sl_pct: float = 0.50,
         target_multiplier: float = 2.0,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager

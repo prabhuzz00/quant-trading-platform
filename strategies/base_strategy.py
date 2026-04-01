@@ -10,7 +10,7 @@ logger = structlog.get_logger(__name__)
 
 
 class BaseStrategy(ABC):
-    def __init__(self, name: str, enabled: bool = True):
+    def __init__(self, name: str, enabled: bool = False):
         self.name = name
         self.enabled = enabled
         # Set to True for strategies that require historical candles before

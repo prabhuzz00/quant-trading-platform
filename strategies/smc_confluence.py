@@ -47,7 +47,7 @@ class SMCConfluenceStrategy(BaseStrategy):
         quantity: int = 1,
         stoploss_points: float = 50.0,
         target_points: float = 100.0,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.exchange_segment = exchange_segment

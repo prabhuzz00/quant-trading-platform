@@ -25,7 +25,7 @@ class CoveredCall(BaseStrategy):
         quantity: int = 1,
         otm_points: float = 100.0,
         sl_multiplier: float = 2.0,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager
