@@ -153,6 +153,55 @@ class KillSwitchRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Regime schemas
+# ---------------------------------------------------------------------------
+
+class StrategyScoreItem(BaseModel):
+    strategy_name: str
+    score: int
+    regime: str
+    recommended: bool
+    reason: str
+
+
+class RegimeStatusResponse(BaseModel):
+    regime_type: str
+    trend: str
+    volatility: str
+    volume: str
+    atr_pct: Optional[float] = None
+    volume_ratio: Optional[float] = None
+    ema_fast: Optional[float] = None
+    ema_slow: Optional[float] = None
+    candle_count: int
+    description: str
+    scores: List[StrategyScoreItem] = Field(default_factory=list)
+    enabled_by_regime: List[str] = Field(default_factory=list)
+    disabled_by_regime: List[str] = Field(default_factory=list)
+    analyzed_at: Optional[datetime] = None
+    error: Optional[str] = None
+    auto_regime_enabled: bool = False
+    score_threshold: int = 80
+    interval_minutes: int = 15
+
+
+class RegimeConfigResponse(BaseModel):
+    enabled: bool
+    score_threshold: int
+    interval_minutes: int
+    instrument_id: int
+    timeframe: int
+
+
+class RegimeConfigUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    score_threshold: Optional[int] = None
+    interval_minutes: Optional[int] = None
+    instrument_id: Optional[int] = None
+    timeframe: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
 # Error schema
 # ---------------------------------------------------------------------------
 

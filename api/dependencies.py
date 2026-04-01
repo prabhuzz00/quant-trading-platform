@@ -63,3 +63,8 @@ def get_order_socket():
 def get_instrument_manager():
     """Return the initialized InstrumentManager singleton."""
     return app_state["instrument_manager"]
+
+
+def get_regime_engine():
+    """Return the initialized AutoRegimeEngine singleton."""
+    return app_state["regime_engine"]

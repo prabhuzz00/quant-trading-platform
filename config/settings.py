@@ -51,5 +51,12 @@ class Settings(BaseSettings):
     candle_cache_ttl_seconds: int = 3600
     candle_max_store_size: int = 500
 
+    # AI Regime Engine
+    regime_enabled: bool = False          # auto-toggle strategies based on regime
+    regime_interval_minutes: int = 15     # how often the background loop fires
+    regime_score_threshold: int = 80      # min score (0-100) to enable a strategy
+    regime_instrument_id: int = 26000     # candle instrument for regime detection (NIFTY 50)
+    regime_timeframe: int = 5             # candle timeframe in minutes
+
 
 settings = Settings()
