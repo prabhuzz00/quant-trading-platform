@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { strategiesAPI } from '../api/client';
+import { strategiesAPI, riskAPI } from '../api/client';
 
 function pnlClass(val) {
   if (val == null) return 'pnl-neutral';
@@ -26,11 +26,13 @@ const STRATEGY_DESCRIPTIONS = {
 };
 
 export default function StrategyControls() {
-  const [strategies, setStrategies] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [toggling, setToggling]     = useState(null);
-  const [toast, setToast]           = useState(null);
+  const [strategies, setStrategies]       = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
+  const [toggling, setToggling]           = useState(null);
+  const [toast, setToast]                 = useState(null);
+  const [tradingActive, setTradingActive] = useState(false);
+  const [tradingLoading, setTradingLoading] = useState(false);
 
   const showToast = (msg, isError = false) => {
     setToast({ msg, isError });
@@ -50,7 +52,16 @@ export default function StrategyControls() {
     }
   }, []);
 
-  useEffect(() => { fetchStrategies(); }, [fetchStrategies]);
+  const fetchTradingState = useCallback(async () => {
+    try {
+      const data = await riskAPI.getDashboard();
+      setTradingActive(data.trading_enabled ?? false);
+    } catch (_err) {
+      /* non-critical – leave default false */
+    }
+  }, []);
+
+  useEffect(() => { fetchStrategies(); fetchTradingState(); }, [fetchStrategies, fetchTradingState]);
 
   const handleToggle = async (name, currentEnabled) => {
     setToggling(name);
@@ -78,6 +89,20 @@ export default function StrategyControls() {
     }
     fetchStrategies();
     showToast(enable ? 'All strategies enabled.' : 'All strategies disabled.');
+  };
+
+  const handleTradingToggle = async () => {
+    const nextActive = !tradingActive;
+    setTradingLoading(true);
+    try {
+      await riskAPI.updateConfig({ trading_enabled: nextActive });
+      setTradingActive(nextActive);
+      showToast(nextActive ? 'Trading started.' : 'Trading stopped.');
+    } catch (e) {
+      showToast(e.message, true);
+    } finally {
+      setTradingLoading(false);
+    }
   };
 
   const enabledCount  = strategies.filter(s => s.enabled).length;
@@ -120,6 +145,13 @@ export default function StrategyControls() {
             onClick={() => handleBulk(false)}
           >
             Disable All
+          </button>
+          <button
+            className={`btn${tradingActive ? ' btn-danger' : ' btn-success'}`}
+            disabled={tradingLoading}
+            onClick={handleTradingToggle}
+          >
+            {tradingLoading ? '…' : tradingActive ? '⏹ Stop Trading' : '▶ Start Trading'}
           </button>
         </div>
       </div>
@@ -191,22 +223,6 @@ export default function StrategyControls() {
                     </span>
                   </div>
                 )}
-              </div>
-              <div className="strategy-trade-action">
-                <span className={`strategy-trade-status${s.enabled ? ' active' : ''}`}>
-                  {s.enabled ? '● Trading Active' : '○ Inactive'}
-                </span>
-                <button
-                  className={`btn btn-sm${s.enabled ? ' btn-danger' : ' btn-success'}`}
-                  disabled={toggling === s.name}
-                  onClick={() => handleToggle(s.name, s.enabled)}
-                >
-                  {toggling === s.name
-                    ? '…'
-                    : s.enabled
-                      ? '⏹ Stop Trading'
-                      : '▶ Start Trading'}
-                </button>
               </div>
             </div>
           ))}
