@@ -76,3 +76,10 @@ export const manualAPI = {
 
   placeOrder: (payload) => api.post('/manual/order', payload),
 };
+
+export const regimeAPI = {
+  getStatus: () => api.get('/regime/status'),
+  analyze: () => api.post('/regime/analyze'),
+  getConfig: () => api.get('/regime/config'),
+  updateConfig: (data) => api.put('/regime/config', data),
+};

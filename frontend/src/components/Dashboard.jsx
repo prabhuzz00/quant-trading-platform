@@ -8,6 +8,7 @@ import LivePnL from './LivePnL';
 import PositionViewer from './PositionViewer';
 import OrderBook from './OrderBook';
 import ManualTrading from './ManualTrading';
+import RegimePanel from './RegimePanel';
 
 const NAV_ITEMS = [
   { id: 'dashboard',   label: 'Dashboard',      icon: '📊' },
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { id: 'closed',      label: 'Closed Trades',   icon: '📉' },
   { id: 'risk',        label: 'Risk',            icon: '🛡️' },
   { id: 'strategies',  label: 'Strategies',      icon: '⚙️' },
+  { id: 'regime',      label: 'AI Regime',       icon: '🤖' },
   { id: 'positions',   label: 'Positions',       icon: '📋' },
   { id: 'orders',      label: 'Orders',          icon: '📒' },
 ];
@@ -91,6 +93,7 @@ export default function Dashboard() {
               onBack={() => setSelectedStrategy(null)}
             />
           : <StrategyControls onSelectStrategy={setSelectedStrategy} />;
+      case 'regime':      return <RegimePanel />;
       case 'positions':   return <PositionViewer />;
       case 'orders':      return <OrderBook />;
       default:            return <LivePnL dashboardData={dashboardData} />;

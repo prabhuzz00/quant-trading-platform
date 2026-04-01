@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from api.dependencies import app_state
 from api.routes import dashboard, positions, risk, strategies, trades
 from api.routes import manual_trading
+from api.routes import regime as regime_route
 from config.settings import settings
 from core.candle_store import CandleStore
 from core.event_bus import EventBus
@@ -40,6 +41,7 @@ from strategies.strategy_registry import StrategyRegistry
 from engine.instrument_manager import InstrumentManager
 from engine.strategy_engine import StrategyEngine
 from engine.warmup import WarmupService
+from engine.auto_regime_engine import AutoRegimeEngine
 
 logger = structlog.get_logger(__name__)
 
@@ -255,6 +257,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app_state["strategy_engine"] = strategy_engine
     engine_task = asyncio.create_task(strategy_engine.start(), name="strategy_engine")
 
+    # --- AI Regime Engine ---
+    regime_engine = AutoRegimeEngine(
+        strategy_registry=strategy_registry,
+        candle_store=candle_store,
+        instrument_id=settings.regime_instrument_id,
+        timeframe=settings.regime_timeframe,
+        enabled=settings.regime_enabled,
+        interval_minutes=settings.regime_interval_minutes,
+        score_threshold=settings.regime_score_threshold,
+    )
+    app_state["regime_engine"] = regime_engine
+    await regime_engine.start()
+
     position_reconciler = PositionReconciler(
         event_bus=event_bus,
         xts_client=xts_interactive,
@@ -270,6 +285,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- Shutdown ---
     logger.info("Shutting down trading platform API")
 
+    await regime_engine.stop()
     await strategy_engine.stop()
     engine_task.cancel()
     try:
@@ -328,6 +344,7 @@ app.include_router(risk.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(positions.router, prefix="/api")
 app.include_router(manual_trading.router, prefix="/api")
+app.include_router(regime_route.router, prefix="/api")
 app.include_router(dashboard.router)  # WebSocket route mounts at /ws/dashboard
 
 
