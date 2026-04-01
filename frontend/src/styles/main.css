@@ -375,6 +375,14 @@ tbody td {
   color: var(--text-primary);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+tbody td.td-wrap {
+  white-space: normal;
+  word-break: break-word;
+  max-width: 220px;
+  line-height: 1.4;
 }
 
 .td-mono {
