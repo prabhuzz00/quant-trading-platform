@@ -226,10 +226,7 @@ class RegimeDetector:
             regime_type = RegimeType.TRENDING_BULLISH
         elif trend == "bearish":
             regime_type = RegimeType.TRENDING_BEARISH
-        elif volatility == "high":
-            regime_type = RegimeType.SIDEWAYS_HIGH_VOL
-        elif volatility == "medium" and trend == "neutral":
-            # Treat medium volatility in a neutral trend as high-vol sideways
+        elif volatility == "medium":
             regime_type = RegimeType.SIDEWAYS_HIGH_VOL
         else:
             regime_type = RegimeType.SIDEWAYS_LOW_VOL

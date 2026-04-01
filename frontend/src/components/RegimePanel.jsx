@@ -321,7 +321,7 @@ export default function RegimePanel() {
                   )}
                 </div>
               )}
-              {status.skipped && status.skipped.length > 0 && !status.auto_regime_enabled && (
+              {status.skipped?.length > 0 && !status.auto_regime_enabled && (
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-muted)' }}>
                   ℹ️ Auto-regime is off — scores are informational only. Enable below to auto-toggle.
                 </div>

@@ -1,6 +1,4 @@
 """Regime detection and auto-toggle API routes."""
-from typing import Optional
-
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_regime_engine
