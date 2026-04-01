@@ -27,6 +27,7 @@ def _make_strategy_with_instruments():
         symbol="NIFTY",
         exchange_segment="NSEFO",
         quantity=1,
+        enabled=True,
     )
     strat._ce_instrument = ce_instr
     strat._pe_instrument = pe_instr

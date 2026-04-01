@@ -27,7 +27,7 @@ class ShortStraddle(BaseStrategy):
         quantity: int = 1,
         sl_pct: float = 0.50,
         target_pct: float = 0.50,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager

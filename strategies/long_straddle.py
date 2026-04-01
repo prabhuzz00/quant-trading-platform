@@ -25,7 +25,7 @@ class LongStraddle(BaseStrategy):
         quantity: int = 1,
         sl_pct: float = 0.30,
         target_multiplier: float = 2.0,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager

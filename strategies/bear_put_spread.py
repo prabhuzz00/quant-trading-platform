@@ -24,7 +24,7 @@ class BearPutSpread(BaseStrategy):
         exchange_segment: str = "NSEFO",
         quantity: int = 1,
         spread_points: float = 100.0,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager

@@ -24,7 +24,7 @@ class CalendarSpread(BaseStrategy):
         symbol: str = "NIFTY",
         exchange_segment: str = "NSEFO",
         quantity: int = 1,
-        enabled: bool = True,
+        enabled: bool = False,
     ):
         super().__init__(name=name, enabled=enabled)
         self.instrument_manager = instrument_manager
