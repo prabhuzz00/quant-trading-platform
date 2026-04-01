@@ -192,6 +192,22 @@ export default function StrategyControls() {
                   </div>
                 )}
               </div>
+              <div className="strategy-trade-action">
+                <span className={`strategy-trade-status${s.enabled ? ' active' : ''}`}>
+                  {s.enabled ? '● Trading Active' : '○ Inactive'}
+                </span>
+                <button
+                  className={`btn btn-sm${s.enabled ? ' btn-danger' : ' btn-success'}`}
+                  disabled={toggling === s.name}
+                  onClick={() => handleToggle(s.name, s.enabled)}
+                >
+                  {toggling === s.name
+                    ? '…'
+                    : s.enabled
+                      ? '⏹ Stop Trading'
+                      : '▶ Start Trading'}
+                </button>
+              </div>
             </div>
           ))}
         </div>
