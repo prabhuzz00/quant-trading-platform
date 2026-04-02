@@ -7,9 +7,11 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -76,3 +78,30 @@ class SystemState(Base):
     key = Column(String(128), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
+class OHLCVData(Base):
+    """Stores historical OHLCV candle data fetched from the XTS Market Data API."""
+    __tablename__ = "ohlcv_data"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    exchange_segment = Column(String(32), nullable=False)
+    exchange_instrument_id = Column(BigInteger, nullable=False, index=True)
+    symbol = Column(String(64), nullable=False, index=True)
+    timeframe = Column(Integer, nullable=False, default=1, comment="Candle interval in minutes")
+    timestamp = Column(DateTime(timezone=True), nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "exchange_instrument_id", "timeframe", "timestamp",
+            name="uq_ohlcv_instrument_tf_ts",
+        ),
+        Index("ix_ohlcv_instrument_tf", "exchange_instrument_id", "timeframe"),
+        Index("ix_ohlcv_symbol_ts", "symbol", "timestamp"),
+    )

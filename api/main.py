@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from api.dependencies import app_state
 from api.routes import dashboard, positions, risk, strategies, trades
 from api.routes import manual_trading
+from api.routes import ohlcv as ohlcv_route
 from api.routes import regime as regime_route
 from config.settings import settings
 from core.candle_store import CandleStore
@@ -345,6 +346,7 @@ app.include_router(risk.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(positions.router, prefix="/api")
 app.include_router(manual_trading.router, prefix="/api")
+app.include_router(ohlcv_route.router, prefix="/api")
 app.include_router(regime_route.router, prefix="/api")
 app.include_router(dashboard.router)  # WebSocket route mounts at /ws/dashboard
 
