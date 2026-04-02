@@ -59,5 +59,12 @@ class Settings(BaseSettings):
     regime_instrument_id: int = 26000     # candle instrument for regime detection (NIFTY 50)
     regime_timeframe: int = 5             # candle timeframe in minutes
 
+    # OHLCV data fetch defaults (Nifty 50)
+    ohlcv_default_segment: str = "NSECM"
+    ohlcv_default_instrument_id: int = 26000   # NIFTY 50 on NSE Cash
+    ohlcv_default_symbol: str = "NIFTY 50"
+    ohlcv_default_timeframe: int = 1           # 1-minute candles
+    ohlcv_default_lookback_days: int = 5
+
 
 settings = Settings()

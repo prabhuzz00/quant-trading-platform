@@ -267,3 +267,48 @@ class ManualOrderRequest(BaseModel):
 class ManualOrderResponse(BaseModel):
     order_id: str
     message: str
+
+
+# ---------------------------------------------------------------------------
+# OHLCV schemas
+# ---------------------------------------------------------------------------
+
+class OHLCVFetchRequest(BaseModel):
+    exchange_segment: str = Field("NSECM", description="XTS exchange segment (e.g. NSECM)")
+    exchange_instrument_id: int = Field(26000, description="XTS instrument ID (26000 = NIFTY 50)")
+    symbol: str = Field("NIFTY 50", description="Human-readable symbol name")
+    timeframe: int = Field(1, ge=1, description="Candle interval in minutes (1, 5, 15, 30, 60)")
+    start_time: Optional[str] = Field(None, description="XTS start time (e.g. 'Jan 01 2024 091500'). Auto-computed if omitted.")
+    end_time: Optional[str] = Field(None, description="XTS end time. Defaults to now if omitted.")
+    lookback_days: int = Field(5, ge=1, le=365, description="Calendar days to look back when start_time is not provided")
+
+
+class OHLCVRecord(BaseModel):
+    id: int
+    exchange_segment: str
+    exchange_instrument_id: int
+    symbol: str
+    timeframe: int
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OHLCVFetchResponse(BaseModel):
+    message: str
+    candles_upserted: int
+    exchange_segment: str
+    exchange_instrument_id: int
+    symbol: str
+    timeframe: int
+
+
+class OHLCVListResponse(BaseModel):
+    records: List[OHLCVRecord]
+    total: int
