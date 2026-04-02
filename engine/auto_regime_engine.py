@@ -243,10 +243,13 @@ class AutoRegimeEngine:
         than the regime detector requires.
         """
         try:
+            # Request 2× the minimum so indicator warm-up periods (EMA-50,
+            # ATR-14, Volume SMA-20) have enough look-back data even when
+            # some candles are missing due to non-trading hours or gaps.
             rows = await OHLCVService.get_stored_candles(
                 exchange_instrument_id=self.instrument_id,
                 timeframe=self.timeframe,
-                limit=self._detector.min_candles * 2,  # fetch extra headroom
+                limit=self._detector.min_candles * 2,
             )
             if not rows:
                 logger.debug(
