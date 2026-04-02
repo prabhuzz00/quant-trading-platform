@@ -139,6 +139,16 @@ _SCORE_MATRIX: Dict[str, Dict[RegimeType, int]] = {
         RegimeType.HIGH_VOLATILITY:   70,
         RegimeType.UNKNOWN:           50,
     },
+    # Regime-aware indicator strategy – adapts its indicator set to the
+    # detected market regime, so it scores well across all regimes.
+    "indicator_regime": {
+        RegimeType.TRENDING_BULLISH:  88,
+        RegimeType.TRENDING_BEARISH:  88,
+        RegimeType.SIDEWAYS_HIGH_VOL: 82,
+        RegimeType.SIDEWAYS_LOW_VOL:  84,
+        RegimeType.HIGH_VOLATILITY:   80,
+        RegimeType.UNKNOWN:           50,
+    },
 }
 
 # Default score when a strategy name is not in the matrix

@@ -37,6 +37,7 @@ from strategies.short_straddle import ShortStraddle
 from strategies.short_strangle import ShortStrangle
 from strategies.smc_confluence import SMCConfluenceStrategy
 from strategies.volume_breakout import VolumeBreakoutStrategy
+from strategies.indicator_regime_strategy import IndicatorRegimeStrategy
 from strategies.strategy_registry import StrategyRegistry
 from engine.instrument_manager import InstrumentManager
 from engine.strategy_engine import StrategyEngine
@@ -70,6 +71,7 @@ def _build_strategy_registry(candle_store: CandleStore) -> StrategyRegistry:
     for strategy in [
         SMCConfluenceStrategy(),
         VolumeBreakoutStrategy(),
+        IndicatorRegimeStrategy(),
     ]:
         strategy.candle_store = candle_store
         try:
