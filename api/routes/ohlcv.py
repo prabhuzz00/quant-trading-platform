@@ -51,7 +51,7 @@ async def fetch_ohlcv(
         )
     except Exception as exc:
         logger.error("OHLCV fetch failed", error=str(exc))
-        raise HTTPException(status_code=502, detail=f"Failed to fetch OHLCV data: {exc}")
+        raise HTTPException(status_code=502, detail="Failed to fetch OHLCV data from XTS API")
 
     return OHLCVFetchResponse(
         message=f"Fetched and stored {count} candle(s)",
@@ -87,7 +87,7 @@ async def get_ohlcv_data(
         )
     except Exception as exc:
         logger.error("Failed to query OHLCV data", error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Database query failed: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve OHLCV data")
 
     return OHLCVListResponse(
         records=[OHLCVRecord.model_validate(r) for r in records],
