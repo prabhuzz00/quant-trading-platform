@@ -29,7 +29,8 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
-from core.candle_store import CandleStore
+from core.candle_store import Candle, CandleStore
+from core.ohlcv_service import OHLCVService
 from engine.regime_detector import MarketRegime, RegimeDetector, RegimeType
 from engine.regime_scorer import RegimeScorer, StrategyScore
 from strategies.strategy_registry import StrategyRegistry
@@ -108,15 +109,43 @@ class AutoRegimeEngine:
         """
         Run one regime analysis cycle.
 
-        1. Fetch candles from the candle store.
-        2. Detect the current market regime.
-        3. Score every registered strategy.
-        4. If ``self.enabled`` is True, toggle strategies accordingly.
+        1. Fetch candles from the candle store (in-memory).
+        2. If insufficient candles, fall back to stored OHLCV data in
+           PostgreSQL to avoid the "Insufficient candle data" error.
+        3. Detect the current market regime.
+        4. Score every registered strategy.
+        5. If ``self.enabled`` is True, toggle strategies accordingly.
 
         Returns the :class:`RegimeAnalysisResult`.
         """
         try:
             candles = self._candle_store.get_candles(self.instrument_id, self.timeframe)
+
+            # Fall back to PostgreSQL OHLCV data when the in-memory buffer
+            # does not have enough candles for reliable regime detection.
+            if len(candles) < self._detector.min_candles:
+                logger.info(
+                    "AutoRegimeEngine: in-memory candles insufficient, "
+                    "falling back to stored OHLCV data",
+                    have=len(candles),
+                    need=self._detector.min_candles,
+                    instrument_id=self.instrument_id,
+                    timeframe=self.timeframe,
+                )
+                db_candles = await self._fetch_candles_from_db()
+                if db_candles:
+                    candles = db_candles
+                    # Back-fill the in-memory store so subsequent cycles
+                    # can skip the DB round-trip.
+                    for c in candles:
+                        self._candle_store.add_candle(
+                            self.instrument_id, self.timeframe, c
+                        )
+                    logger.info(
+                        "AutoRegimeEngine: loaded candles from OHLCV DB",
+                        count=len(candles),
+                    )
+
             regime = self._detector.detect(candles)
 
             strategy_names = [s.name for s in self._registry.get_all_strategies()]
@@ -204,6 +233,48 @@ class AutoRegimeEngine:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    async def _fetch_candles_from_db(self) -> List[Candle]:
+        """Query the ``ohlcv_data`` PostgreSQL table for stored candles and
+        return them as :class:`Candle` objects ordered oldest → newest.
+
+        This provides a fallback data source when the in-memory
+        :class:`CandleStore` has not been warmed up or has fewer candles
+        than the regime detector requires.
+        """
+        try:
+            rows = await OHLCVService.get_stored_candles(
+                exchange_instrument_id=self.instrument_id,
+                timeframe=self.timeframe,
+                limit=self._detector.min_candles * 2,  # fetch extra headroom
+            )
+            if not rows:
+                logger.debug(
+                    "AutoRegimeEngine: no OHLCV rows found in DB",
+                    instrument_id=self.instrument_id,
+                    timeframe=self.timeframe,
+                )
+                return []
+
+            # OHLCVService returns rows newest-first; reverse for oldest → newest.
+            candles = [
+                Candle(
+                    timestamp=row.timestamp,
+                    open=row.open,
+                    high=row.high,
+                    low=row.low,
+                    close=row.close,
+                    volume=row.volume,
+                )
+                for row in reversed(rows)
+            ]
+            return candles
+        except Exception as exc:
+            logger.warning(
+                "AutoRegimeEngine: failed to fetch OHLCV data from DB",
+                error=str(exc),
+            )
+            return []
 
     async def _loop(self) -> None:
         while True:
