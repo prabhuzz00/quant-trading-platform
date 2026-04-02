@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     xts_interactive_key: str = ""
     xts_interactive_secret: str = ""
     xts_interactive_source: str = "WebAPI"
+    xts_interactive_client_id: str = ""  # Client trading ID for dealer/CTCL mode (e.g. "WD1768")
 
     # Set to False if the broker endpoint uses a self-signed / private CA certificate
     xts_verify_ssl: bool = True

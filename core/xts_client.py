@@ -212,14 +212,24 @@ class XTSMarketDataClient:
 
 
 class XTSInteractiveClient:
-    def __init__(self, url: str, app_key: str, secret_key: str, source: str = "WebAPI", verify_ssl: bool = True):
+    def __init__(
+        self,
+        url: str,
+        app_key: str,
+        secret_key: str,
+        source: str = "WebAPI",
+        verify_ssl: bool = True,
+        client_id: Optional[str] = None,
+    ):
         self.url = url.rstrip("/")
         self.app_key = app_key
         self.secret_key = secret_key
         self.source = source
         self.verify_ssl = verify_ssl
+        self.client_id = client_id
         self.token: Optional[str] = None
         self.user_id: Optional[str] = None
+        self.is_investor_client: bool = True
         self._client: Optional[httpx.AsyncClient] = None
         self._order_limiter = RateLimiter(10)
         self._query_limiter = RateLimiter(1)
@@ -249,6 +259,16 @@ class XTSInteractiveClient:
     def generate_order_unique_id(self) -> str:
         return str(uuid.uuid4()).replace("-", "")[:18]
 
+    def _is_dealer(self) -> bool:
+        """Return True when logged in as a dealer (isInvestorClient=false)."""
+        return not self.is_investor_client
+
+    def _inject_client_id(self, mapping: Dict) -> Dict:
+        """Add clientID to a payload/params dict when in dealer mode."""
+        if self._is_dealer() and self.client_id:
+            mapping = {**mapping, "clientID": self.client_id}
+        return mapping
+
     async def login(self) -> Dict:
         client = await self._get_client()
         payload = {"appKey": self.app_key, "secretKey": self.secret_key, "source": self.source}
@@ -257,7 +277,12 @@ class XTSInteractiveClient:
         result = data.get("result", data)
         self.token = result.get("token")
         self.user_id = result.get("userID")
-        logger.info("XTS Interactive login successful", user_id=self.user_id)
+        self.is_investor_client = result.get("isInvestorClient", True)
+        logger.info(
+            "XTS Interactive login successful",
+            user_id=self.user_id,
+            is_investor_client=self.is_investor_client,
+        )
         return result
 
     async def place_order(
@@ -269,7 +294,7 @@ class XTSInteractiveClient:
     ) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {
+        payload = self._inject_client_id({
             "exchangeSegment": exchange_segment,
             "exchangeInstrumentID": exchange_instrument_id,
             "productType": product_type,
@@ -281,7 +306,7 @@ class XTSInteractiveClient:
             "limitPrice": limit_price,
             "stopPrice": stop_price,
             "orderUniqueIdentifier": order_unique_identifier or self.generate_order_unique_id(),
-        }
+        })
         resp = await client.post(f"{self.url}/interactive/orders", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
@@ -296,7 +321,7 @@ class XTSInteractiveClient:
     ) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {
+        payload = self._inject_client_id({
             "exchangeSegment": exchange_segment,
             "exchangeInstrumentID": exchange_instrument_id,
             "orderSide": order_side,
@@ -311,7 +336,7 @@ class XTSInteractiveClient:
             "isProOrder": is_pro_order,
             "orderUniqueIdentifier": order_unique_identifier or self.generate_order_unique_id(),
             "disclosedQuantity": 0,
-        }
+        })
         resp = await client.post(f"{self.url}/interactive/orders/bracket", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
@@ -324,7 +349,7 @@ class XTSInteractiveClient:
     ) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {
+        payload = self._inject_client_id({
             "exchangeSegment": exchange_segment,
             "exchangeInstrumentID": exchange_instrument_id,
             "orderSide": order_side,
@@ -336,42 +361,43 @@ class XTSInteractiveClient:
             "timeInForce": time_in_force,
             "orderUniqueIdentifier": order_unique_identifier or self.generate_order_unique_id(),
             "disclosedQuantity": 0,
-        }
+        })
         resp = await client.post(f"{self.url}/interactive/orders/cover", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
     async def modify_order(self, app_order_id: str, **kwargs) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {"appOrderID": app_order_id, **kwargs}
+        payload = self._inject_client_id({"appOrderID": app_order_id, **kwargs})
         resp = await client.put(f"{self.url}/interactive/orders", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
     async def cancel_order(self, app_order_id: str) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        params = {"appOrderID": app_order_id}
+        params = self._inject_client_id({"appOrderID": app_order_id})
         resp = await client.delete(f"{self.url}/interactive/orders", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def cancel_bracket_order(self, bo_entry_order_id: str) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        params = {"boEntryOrderId": bo_entry_order_id}
+        params = self._inject_client_id({"boEntryOrderId": bo_entry_order_id})
         resp = await client.delete(f"{self.url}/interactive/orders/bracket", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def exit_cover_order(self, app_order_id: str) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {"appOrderID": app_order_id}
+        payload = self._inject_client_id({"appOrderID": app_order_id})
         resp = await client.put(f"{self.url}/interactive/orders/cover", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
     async def cancel_all_orders(self) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        resp = await client.post(f"{self.url}/interactive/orders/cancelall", json={}, headers=self._headers())
+        payload = self._inject_client_id({})
+        resp = await client.post(f"{self.url}/interactive/orders/cancelall", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
     async def squareoff_position(
@@ -384,7 +410,7 @@ class XTSInteractiveClient:
     ) -> Dict:
         await self._order_limiter.acquire()
         client = await self._get_client()
-        payload = {
+        payload = self._inject_client_id({
             "exchangeSegment": exchange_segment,
             "exchangeInstrumentID": exchange_instrument_id,
             "productType": product_type,
@@ -393,33 +419,41 @@ class XTSInteractiveClient:
             "squareOffQtyValue": squareoff_qty_value,
             "blockOrderSending": block_order_sending,
             "cancelOrders": cancel_orders,
-        }
+        })
         resp = await client.put(f"{self.url}/interactive/portfolio/squareoff", json=payload, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_order_book(self, app_order_id: Optional[str] = None) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        params = {}
+        params: Dict = {}
         if app_order_id:
             params["appOrderID"] = app_order_id
+        params = self._inject_client_id(params)
         resp = await client.get(f"{self.url}/interactive/orders", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_trade_book(self) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        resp = await client.get(f"{self.url}/interactive/orders/trades", headers=self._headers())
+        params = self._inject_client_id({})
+        resp = await client.get(f"{self.url}/interactive/orders/trades", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_positions(self, day_or_net: str = "NetWise") -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        params = {"dayOrNet": day_or_net}
+        params = self._inject_client_id({"dayOrNet": day_or_net})
         resp = await client.get(f"{self.url}/interactive/portfolio/positions", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_balance(self) -> Dict:
+        if self._is_dealer():
+            raise XTSAPIError(
+                "Balance API is not available for dealer sessions. "
+                "Use the dealer terminal to view balance.",
+                code="DEALER_BALANCE_UNAVAILABLE",
+            )
         await self._query_limiter.acquire()
         client = await self._get_client()
         resp = await client.get(f"{self.url}/interactive/user/balance", headers=self._headers())
@@ -428,13 +462,55 @@ class XTSInteractiveClient:
     async def get_holdings(self) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        resp = await client.get(f"{self.url}/interactive/portfolio/holdings", headers=self._headers())
+        params = self._inject_client_id({})
+        resp = await client.get(f"{self.url}/interactive/portfolio/holdings", params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_profile(self) -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
         resp = await client.get(f"{self.url}/interactive/user/profile", headers=self._headers())
+        return self._handle_response(resp)
+
+    async def get_dealer_order_book(self) -> Dict:
+        """Fetch the dealer's own order book (available in dealer/CTCL mode only).
+
+        This endpoint returns orders placed by the dealer terminal itself.
+        clientID is not injected here because the endpoint is scoped to the
+        dealer's session, not to a specific underlying client.
+        """
+        await self._query_limiter.acquire()
+        client = await self._get_client()
+        resp = await client.get(f"{self.url}/interactive/orders/dealerorderbook", headers=self._headers())
+        return self._handle_response(resp)
+
+    async def get_dealer_trade_book(self) -> Dict:
+        """Fetch the dealer's own trade book (available in dealer/CTCL mode only).
+
+        This endpoint returns trades executed by the dealer terminal itself.
+        clientID is not injected here because the endpoint is scoped to the
+        dealer's session, not to a specific underlying client.
+        """
+        await self._query_limiter.acquire()
+        client = await self._get_client()
+        resp = await client.get(f"{self.url}/interactive/orders/dealertradebook", headers=self._headers())
+        return self._handle_response(resp)
+
+    async def get_dealer_positions(self, day_or_net: str = "NetWise") -> Dict:
+        """Fetch the dealer's own positions (available in dealer/CTCL mode only).
+
+        This endpoint returns positions held by the dealer terminal itself.
+        clientID is not injected here because the endpoint is scoped to the
+        dealer's session, not to a specific underlying client.
+        """
+        await self._query_limiter.acquire()
+        client = await self._get_client()
+        params = {"dayOrNet": day_or_net}
+        resp = await client.get(
+            f"{self.url}/interactive/portfolio/dealerpositions",
+            params=params,
+            headers=self._headers(),
+        )
         return self._handle_response(resp)
 
     async def close(self):
