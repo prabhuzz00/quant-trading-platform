@@ -121,6 +121,7 @@ class RiskMetrics(BaseModel):
     daily_pnl: float
     open_trades_count: int
     margin_used: Optional[float] = None
+    available_margin: Optional[float] = None
     trading_enabled: bool
     kill_switch_active: bool
     per_strategy_metrics: List[StrategyPnlMetric] = Field(default_factory=list)
