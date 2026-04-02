@@ -246,6 +246,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await warmup_service.warmup_strategies(strategy_registry.get_all_strategies())
         except Exception as exc:
             logger.warning("Historical candle warmup encountered an error", error=str(exc))
+
+        # Explicitly warm up the regime detection instrument so that
+        # AutoRegimeEngine always has sufficient XTS historical candles,
+        # independent of which indicator-based strategies are registered.
+        try:
+            await warmup_service.warmup_instrument(
+                exchange_segment=settings.regime_exchange_segment,
+                instrument_id=settings.regime_instrument_id,
+                timeframe=settings.regime_timeframe,
+                n_candles=settings.regime_n_candles,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Regime instrument historical warmup encountered an error",
+                instrument_id=settings.regime_instrument_id,
+                timeframe=settings.regime_timeframe,
+                error=str(exc),
+            )
     else:
         logger.info("Skipping historical candle warmup – XTS Market Data not authenticated")
 
