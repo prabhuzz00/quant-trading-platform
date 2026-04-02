@@ -77,6 +77,8 @@ export default function Dashboard() {
   }, [handleWsMessage, handleWsError]);
 
   const dailyPnl = dashboardData?.daily_pnl ?? dashboardData?.pnl?.daily_realized ?? null;
+  const availableMargin = dashboardData?.risk_metrics?.available_margin ?? null;
+  const usedMargin = dashboardData?.risk_metrics?.margin_used ?? null;
 
   function renderContent() {
     switch (activePage) {
@@ -144,6 +146,24 @@ export default function Dashboard() {
               <span className="topbar-label">Daily PnL</span>
               <span className={`topbar-pnl ${pnlClass(dailyPnl)}`}>
                 ₹{fmt(dailyPnl)}
+              </span>
+            </span>
+          )}
+
+          {availableMargin != null && (
+            <span>
+              <span className="topbar-label">Avail. Margin</span>
+              <span className="topbar-pnl pnl-neutral">
+                ₹{Number(availableMargin).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </span>
+          )}
+
+          {usedMargin != null && (
+            <span>
+              <span className="topbar-label">Used Margin</span>
+              <span className="topbar-pnl pnl-neutral">
+                ₹{Number(usedMargin).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </span>
           )}
