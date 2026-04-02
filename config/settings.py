@@ -57,7 +57,9 @@ class Settings(BaseSettings):
     regime_interval_minutes: int = 15     # how often the background loop fires
     regime_score_threshold: int = 80      # min score (0-100) to enable a strategy
     regime_instrument_id: int = 26000     # candle instrument for regime detection (NIFTY 50)
+    regime_exchange_segment: str = "NSECM"  # exchange segment for regime instrument warmup
     regime_timeframe: int = 5             # candle timeframe in minutes
+    regime_n_candles: int = 100           # historical candles to fetch for regime detection
 
 
 settings = Settings()
