@@ -53,7 +53,6 @@ async def _build_dashboard_payload() -> dict:
     open_trades: list = []
     daily_pnl_total: float = 0.0
     per_strategy_pnl: list = []
-    risk_metrics: dict = {}
 
     if trade_manager:
         raw_open = trade_manager.get_open_trades()
@@ -75,19 +74,26 @@ async def _build_dashboard_payload() -> dict:
             {"strategy_name": k, **v} for k, v in strategy_map.items()
         ]
 
+    margin_data = await _fetch_margin()
+    risk_metrics = {
+        "daily_pnl": None,
+        "open_trades_count": 0,
+        "margin_used": margin_data["margin_used"],
+        "available_margin": margin_data["available_margin"],
+        "trading_enabled": False,
+        "kill_switch_active": False,
+        "per_strategy_metrics": [],
+    }
+
     if risk_manager:
-        daily_pnl = risk_manager.get_daily_loss()
         open_count = trade_manager.get_open_trade_count() if trade_manager else 0
-        margin_data = await _fetch_margin()
-        risk_metrics = {
-            "daily_pnl": daily_pnl,
+        risk_metrics.update({
+            "daily_pnl": risk_manager.get_daily_loss(),
             "open_trades_count": open_count,
-            "margin_used": margin_data["margin_used"],
-            "available_margin": margin_data["available_margin"],
             "trading_enabled": risk_manager.config.trading_enabled,
             "kill_switch_active": kill_switch.is_activated if kill_switch else False,
             "per_strategy_metrics": per_strategy_pnl,
-        }
+        })
 
     return {
         "open_trades": open_trades,
