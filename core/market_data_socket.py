@@ -1,6 +1,6 @@
 import asyncio
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 import socketio
 import structlog
@@ -23,11 +23,16 @@ SOCKET_EVENTS = {
 
 
 class MarketDataSocket:
-    def __init__(self, url: str, token: str, user_id: str, event_bus: EventBus, broadcast_mode: str = "Full"):
+    # XTS message code for candle (OHLC) subscriptions
+    _CANDLE_MESSAGE_CODE = 1505
+
+    def __init__(self, url: str, token: str, user_id: str, event_bus: EventBus,
+                 xts_client=None, broadcast_mode: str = "Full"):
         self.url = url
         self.token = token
         self.user_id = user_id
         self.event_bus = event_bus
+        self.xts_client = xts_client
         self.broadcast_mode = broadcast_mode
         self._sio: Optional[socketio.AsyncClient] = None
         self._connected = False
@@ -106,11 +111,41 @@ class MarketDataSocket:
         except Exception as e:
             logger.error("MarketDataSocket event handling error", event=event_name, error=str(e))
 
+    async def subscribe_candles(self, instruments: List[Dict[str, Any]]) -> None:
+        """Subscribe to live candle (1505) events for the given instruments.
+
+        Parameters
+        ----------
+        instruments:
+            List of dicts with ``exchangeSegment`` and ``exchangeInstrumentID``
+            keys, e.g. ``[{"exchangeSegment": 1, "exchangeInstrumentID": 26000}]``.
+        """
+        if not instruments:
+            return
+        if self.xts_client is None:
+            logger.warning("MarketDataSocket: cannot subscribe to candles – no XTS client attached")
+            return
+        try:
+            result = await self.xts_client.subscribe(
+                instruments=instruments,
+                xts_message_code=self._CANDLE_MESSAGE_CODE,
+            )
+            logger.info(
+                "MarketDataSocket: subscribed to live candles",
+                instruments=len(instruments),
+                result_type=result.get("type", ""),
+            )
+        except Exception as exc:
+            logger.warning(
+                "MarketDataSocket: candle subscription failed",
+                error=str(exc),
+            )
+
     async def disconnect(self):
         self._running = False
         if self._sio and self._connected:
             await self._sio.disconnect()
 
-    @property
     def is_connected(self) -> bool:
+        """Return True when the WebSocket transport is alive."""
         return self._connected
