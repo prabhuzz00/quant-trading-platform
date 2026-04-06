@@ -330,7 +330,8 @@ class AutoRegimeEngine:
                 self.timeframe, self.timeframe
             )
             n_candles = self._detector.min_candles * 2
-            # 1.5× buffer to account for non-trading hours/weekends
+            # Extend the time window by 1.5× to compensate for non-trading
+            # hours and weekends (trading sessions are ~6.25 h/day).
             lookback_minutes = int(n_candles * self.timeframe * 1.5)
             end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(minutes=lookback_minutes)
