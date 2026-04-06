@@ -179,6 +179,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             token=md_token,
             user_id=md_user_id,
             event_bus=event_bus,
+            xts_client=xts_market_data,
         )
         try:
             await market_data_socket.connect()
@@ -247,8 +248,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await warmup_service.warmup_strategies(strategy_registry.get_all_strategies())
         except Exception as exc:
             logger.warning("Historical candle warmup encountered an error", error=str(exc))
+
+        # Also warm up the regime engine instrument so regime detection
+        # succeeds from the very first cycle even before live candles arrive.
+        try:
+            await warmup_service.warmup_instrument(
+                exchange_segment=settings.ohlcv_default_segment,
+                instrument_id=settings.regime_instrument_id,
+                timeframe=settings.regime_timeframe,
+                n_candles=150,  # enough for EMA-50 + ATR-14 + buffer
+            )
+        except Exception as exc:
+            logger.warning("Regime instrument warmup failed", error=str(exc))
     else:
         logger.info("Skipping historical candle warmup – XTS Market Data not authenticated")
+
+    # --- Subscribe to live candle feed for key instruments (non-fatal) ---
+    if market_data_socket is not None:
+        from core.xts_client import EXCHANGE_SEGMENTS
+        candle_instruments = [
+            {
+                "exchangeSegment": EXCHANGE_SEGMENTS.get(
+                    settings.ohlcv_default_segment,
+                    settings.ohlcv_default_segment,
+                ),
+                "exchangeInstrumentID": settings.regime_instrument_id,
+            },
+        ]
+        try:
+            await market_data_socket.subscribe_candles(candle_instruments)
+        except Exception as exc:
+            logger.warning("Live candle subscription failed", error=str(exc))
 
     # --- Background tasks ---
     strategy_engine = StrategyEngine(
@@ -268,6 +298,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         enabled=settings.regime_enabled,
         interval_minutes=settings.regime_interval_minutes,
         score_threshold=settings.regime_score_threshold,
+        xts_client=xts_market_data,
+        exchange_segment=settings.ohlcv_default_segment,
     )
     app_state["regime_engine"] = regime_engine
     await regime_engine.start()

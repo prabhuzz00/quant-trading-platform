@@ -77,6 +77,6 @@ class OrderSocket:
         if self._sio and self._connected:
             await self._sio.disconnect()
 
-    @property
     def is_connected(self) -> bool:
+        """Return True when the WebSocket transport is alive."""
         return self._connected

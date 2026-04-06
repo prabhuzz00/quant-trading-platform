@@ -24,13 +24,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import structlog
 
 from core.candle_store import Candle, CandleStore
-from core.ohlcv_service import OHLCVService
+from core.ohlcv_service import OHLCVService, _parse_ohlc_result as _parse_ohlc_service
 from engine.regime_detector import MarketRegime, RegimeDetector, RegimeType
 from engine.regime_scorer import RegimeScorer, StrategyScore
 from strategies.strategy_registry import StrategyRegistry
@@ -82,6 +82,8 @@ class AutoRegimeEngine:
         enabled: bool = False,
         interval_minutes: int = 15,
         score_threshold: int = 80,
+        xts_client=None,
+        exchange_segment: str = "NSECM",
     ) -> None:
         self._registry = strategy_registry
         self._candle_store = candle_store
@@ -90,6 +92,8 @@ class AutoRegimeEngine:
         self.enabled = enabled
         self.interval_minutes = interval_minutes
         self.score_threshold = score_threshold
+        self._xts_client = xts_client
+        self.exchange_segment = exchange_segment
 
         self._detector = RegimeDetector()
         self._scorer = RegimeScorer(threshold=score_threshold)
@@ -111,10 +115,12 @@ class AutoRegimeEngine:
 
         1. Fetch candles from the candle store (in-memory).
         2. If insufficient candles, fall back to stored OHLCV data in
-           PostgreSQL to avoid the "Insufficient candle data" error.
-        3. Detect the current market regime.
-        4. Score every registered strategy.
-        5. If ``self.enabled`` is True, toggle strategies accordingly.
+           PostgreSQL.
+        3. If still insufficient and an XTS client is available, fetch
+           historical candles directly from the XTS OHLC API.
+        4. Detect the current market regime.
+        5. Score every registered strategy.
+        6. If ``self.enabled`` is True, toggle strategies accordingly.
 
         Returns the :class:`RegimeAnalysisResult`.
         """
@@ -143,6 +149,22 @@ class AutoRegimeEngine:
                         )
                     logger.info(
                         "AutoRegimeEngine: loaded candles from OHLCV DB",
+                        count=len(candles),
+                    )
+
+            # If DB also doesn't have enough candles, try the XTS OHLC API
+            # directly so the first regime analysis cycle can succeed even
+            # before any live candles arrive via the socket.
+            if len(candles) < self._detector.min_candles:
+                api_candles = await self._fetch_candles_from_api()
+                if api_candles:
+                    candles = api_candles
+                    for c in candles:
+                        self._candle_store.add_candle(
+                            self.instrument_id, self.timeframe, c
+                        )
+                    logger.info(
+                        "AutoRegimeEngine: loaded candles from XTS OHLC API",
                         count=len(candles),
                     )
 
@@ -275,6 +297,86 @@ class AutoRegimeEngine:
         except Exception as exc:
             logger.warning(
                 "AutoRegimeEngine: failed to fetch OHLCV data from DB",
+                error=str(exc),
+            )
+            return []
+
+    # XTS OHLC startTime / endTime format
+    _XTS_TIME_FMT = "%b %d %Y %H%M%S"
+
+    # XTS compressionValue mapping: timeframe minutes → compression integer
+    _TIMEFRAME_TO_COMPRESSION: Dict[int, int] = {
+        1: 1, 3: 3, 5: 5, 10: 10, 15: 15, 30: 30, 60: 60,
+    }
+
+    async def _fetch_candles_from_api(self) -> List[Candle]:
+        """Fetch historical candles directly from the XTS OHLC REST API.
+
+        This is the last-resort fallback when neither the in-memory
+        :class:`CandleStore` nor the PostgreSQL ``ohlcv_data`` table have
+        enough candles for regime detection.  It requires a live
+        authenticated :class:`XTSMarketDataClient`.
+        """
+        if self._xts_client is None or not getattr(self._xts_client, "token", None):
+            logger.debug(
+                "AutoRegimeEngine: XTS client not available for API fetch"
+            )
+            return []
+
+        try:
+            from core.xts_client import EXCHANGE_SEGMENTS
+
+            compression = self._TIMEFRAME_TO_COMPRESSION.get(
+                self.timeframe, self.timeframe
+            )
+            n_candles = self._detector.min_candles * 2
+            # 1.5× buffer to account for non-trading hours/weekends
+            lookback_minutes = int(n_candles * self.timeframe * 1.5)
+            end_dt = datetime.now(timezone.utc)
+            start_dt = end_dt - timedelta(minutes=lookback_minutes)
+
+            seg_value = EXCHANGE_SEGMENTS.get(
+                self.exchange_segment, self.exchange_segment
+            )
+
+            response = await self._xts_client.get_ohlc(
+                exchange_segment=seg_value,
+                exchange_instrument_id=self.instrument_id,
+                start_time=start_dt.strftime(self._XTS_TIME_FMT),
+                end_time=end_dt.strftime(self._XTS_TIME_FMT),
+                compression_value=compression,
+            )
+
+            raw_result = response.get("result", "")
+            parsed = _parse_ohlc_service(raw_result)
+
+            if not parsed:
+                logger.debug("AutoRegimeEngine: XTS OHLC API returned no candles")
+                return []
+
+            # _parse_ohlc_service returns list of dicts; convert to Candle objects
+            candles = [
+                Candle(
+                    timestamp=c["timestamp"],
+                    open=c["open"],
+                    high=c["high"],
+                    low=c["low"],
+                    close=c["close"],
+                    volume=c["volume"],
+                )
+                for c in parsed
+            ]
+            logger.info(
+                "AutoRegimeEngine: fetched candles from XTS OHLC API",
+                count=len(candles),
+                instrument_id=self.instrument_id,
+                timeframe=self.timeframe,
+            )
+            return candles
+
+        except Exception as exc:
+            logger.warning(
+                "AutoRegimeEngine: failed to fetch candles from XTS API",
                 error=str(exc),
             )
             return []
