@@ -82,13 +82,8 @@ class TradeManager:
         symbol = payload.get("TradingSymbol") or payload.get("symbol", "")
 
         # Map XTS OrderSide to action
-        side_raw = payload.get("OrderSide", "")
-        if side_raw == "BUY" or side_raw == "Buy":
-            action = "BUY"
-        elif side_raw == "SELL" or side_raw == "Sell":
-            action = "SELL"
-        else:
-            action = str(side_raw).upper() if side_raw else "BUY"
+        side_raw = str(payload.get("OrderSide", "") or "").upper()
+        action = side_raw if side_raw in ("BUY", "SELL") else "BUY"
 
         if order_id not in self._trades:
             self._trades[order_id] = {

@@ -93,7 +93,7 @@ def _extract_position_list(data) -> list:
 async def get_positions(
     xts=Depends(get_xts_interactive),
 ):
-    """Fetch current net positions from XTS, normalised for the frontend."""
+    """Fetch current net positions from XTS, normalized for the frontend."""
     data = await _call_xts(xts.get_positions("NetWise"), "Failed to fetch positions")
     raw_list = _extract_position_list(data)
     positions = [_normalize_position(p) for p in raw_list]

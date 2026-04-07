@@ -34,7 +34,7 @@ export default function PositionViewer() {
     try {
       const data = await positionsAPI.getAll();
       const list = Array.isArray(data) ? data : data?.positions ?? data?.data ?? [];
-      setPositions(Array.isArray(list) ? list : []);
+      setPositions(list);
       setLastRefresh(new Date());
     } catch (e) {
       setError(e.message);
