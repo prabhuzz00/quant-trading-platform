@@ -24,6 +24,9 @@ def _enrich_trade(trade: dict) -> dict:
     enriched["unrealized_pnl"] = pnl if status == "OPEN" else 0.0
     enriched["realized_pnl"] = pnl if status == "CLOSED" else 0.0
     # Provide defaults for fields that may be absent in the in-memory dict
+    enriched.setdefault("strategy_name", "Manual")
+    enriched.setdefault("action", "BUY")
+    enriched.setdefault("quantity", enriched.get("filled_qty", 0))
     enriched.setdefault("exchange_segment", "")
     enriched.setdefault("exchange_instrument_id", 0)
     enriched.setdefault("order_mode", "REGULAR")
@@ -32,6 +35,8 @@ def _enrich_trade(trade: dict) -> dict:
     enriched.setdefault("target_points", 0.0)
     enriched.setdefault("signal_id", None)
     enriched.setdefault("reason", None)
+    # Remove non-serializable raw data
+    enriched.pop("raw", None)
     return enriched
 
 

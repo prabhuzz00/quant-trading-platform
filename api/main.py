@@ -19,7 +19,18 @@ from core.event_bus import EventBus
 from core.market_data_socket import MarketDataSocket
 from core.order_socket import OrderSocket
 from core.xts_client import XTSInteractiveClient, XTSMarketDataClient
-from database.db import close_db, create_tables, init_db
+from database.db import close_db, create_tables, init_db, get_session as _db_get_session
+
+
+def _get_db_session_factory():
+    """Return an async context-manager factory for DB sessions.
+
+    TradeManager uses this to persist / load trades.  It wraps the
+    application-level ``get_session`` so that the caller can do:
+
+        async with factory() as session: ...
+    """
+    return _db_get_session
 from execution.order_manager import OrderManager
 from execution.position_reconciler import PositionReconciler
 from execution.trade_manager import TradeManager
@@ -212,7 +223,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     kill_switch = KillSwitch(event_bus=event_bus)
     app_state["kill_switch"] = kill_switch
 
-    trade_manager = TradeManager(event_bus=event_bus)
+    trade_manager = TradeManager(event_bus=event_bus, db_session_factory=_get_db_session_factory())
     await trade_manager.start()
     app_state["trade_manager"] = trade_manager
 

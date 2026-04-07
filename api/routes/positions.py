@@ -43,6 +43,31 @@ def _normalize_order(order: dict) -> dict:
     }
 
 
+def _normalize_position(pos: dict) -> dict:
+    """Normalize a raw XTS position dict into a consistent frontend-friendly shape."""
+    return {
+        "symbol": pos.get("TradingSymbol", "") or pos.get("symbol", ""),
+        "exchange_segment": pos.get("ExchangeSegment", "") or pos.get("exchange_segment", ""),
+        "exchange_instrument_id": pos.get("ExchangeInstrumentID", 0) or pos.get("exchange_instrument_id", 0),
+        "product_type": pos.get("ProductType", "") or pos.get("product_type", ""),
+        "buy_qty": int(pos.get("BuyQuantity", 0) or pos.get("Quantity", 0) or pos.get("buy_qty", 0) or 0),
+        "sell_qty": int(pos.get("SellQuantity", 0) or pos.get("sell_qty", 0) or 0),
+        "net_qty": int(pos.get("NetQuantity", 0) or pos.get("Quantity", 0) or pos.get("net_qty", 0) or 0),
+        "avg_buy_price": float(pos.get("BuyAveragePrice", 0) or pos.get("avg_buy_price", 0) or 0),
+        "avg_sell_price": float(pos.get("SellAveragePrice", 0) or pos.get("avg_sell_price", 0) or 0),
+        "mtm_pnl": float(
+            pos.get("RealizedMTM", 0)
+            or pos.get("UnrealizedMTM", 0)
+            or pos.get("MTM", 0)
+            or pos.get("mtm_pnl", 0)
+            or 0
+        ),
+        "realized_mtm": float(pos.get("RealizedMTM", 0) or pos.get("realized_mtm", 0) or 0),
+        "unrealized_mtm": float(pos.get("UnrealizedMTM", 0) or pos.get("unrealized_mtm", 0) or 0),
+        "multiplier": float(pos.get("Multiplier", 1) or 1),
+    }
+
+
 async def _call_xts(coro, error_msg: str):
     try:
         data = await coro
@@ -51,13 +76,28 @@ async def _call_xts(coro, error_msg: str):
         raise HTTPException(status_code=502, detail=f"{error_msg}: {exc}") from exc
 
 
-@router.get("", response_model=PositionResponse)
+def _extract_position_list(data) -> list:
+    """Extract positions list from various XTS response shapes."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        # XTS responses may use "result" or "positionList"
+        for key in ("result", "positionList"):
+            val = data.get(key)
+            if isinstance(val, list):
+                return val
+    return []
+
+
+@router.get("")
 async def get_positions(
     xts=Depends(get_xts_interactive),
 ):
-    """Fetch current net positions from XTS."""
+    """Fetch current net positions from XTS, normalized for the frontend."""
     data = await _call_xts(xts.get_positions("NetWise"), "Failed to fetch positions")
-    return PositionResponse(data=data)
+    raw_list = _extract_position_list(data)
+    positions = [_normalize_position(p) for p in raw_list]
+    return {"positions": positions, "total": len(positions)}
 
 
 @router.get("/balance", response_model=BalanceResponse)
