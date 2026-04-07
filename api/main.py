@@ -13,6 +13,9 @@ from api.routes import dashboard, positions, risk, strategies, trades
 from api.routes import manual_trading
 from api.routes import ohlcv as ohlcv_route
 from api.routes import regime as regime_route
+from api.routes import strategy_catalog as catalog_route
+from api.routes import backtest as backtest_route
+from api.routes import payoff as payoff_route
 from config.settings import settings
 from core.candle_store import CandleStore
 from core.event_bus import EventBus
@@ -391,6 +394,9 @@ app.include_router(positions.router, prefix="/api")
 app.include_router(manual_trading.router, prefix="/api")
 app.include_router(ohlcv_route.router, prefix="/api")
 app.include_router(regime_route.router, prefix="/api")
+app.include_router(catalog_route.router, prefix="/api")
+app.include_router(backtest_route.router, prefix="/api")
+app.include_router(payoff_route.router, prefix="/api")
 app.include_router(dashboard.router)  # WebSocket route mounts at /ws/dashboard
 
 
