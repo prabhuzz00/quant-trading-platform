@@ -9,10 +9,18 @@ import PositionViewer from './PositionViewer';
 import OrderBook from './OrderBook';
 import ManualTrading from './ManualTrading';
 import RegimePanel from './RegimePanel';
+import StrategyCatalog from './StrategyCatalog';
+import Backtest from './Backtest';
+import GreeksAnalysis from './GreeksAnalysis';
+import PayoffDiagram from './PayoffDiagram';
 
 const NAV_ITEMS = [
   { id: 'dashboard',   label: 'Dashboard',      icon: '📊' },
   { id: 'manual',      label: 'Manual Trade',   icon: '🎯' },
+  { id: 'catalog',     label: 'Strategy Catalog', icon: '📚' },
+  { id: 'backtest',    label: 'Backtest',        icon: '🔬' },
+  { id: 'greeks',      label: 'Greeks',          icon: '⚛️' },
+  { id: 'payoff',      label: 'Payoff',          icon: '📈' },
   { id: 'open',        label: 'Open Trades',     icon: '📈' },
   { id: 'closed',      label: 'Closed Trades',   icon: '📉' },
   { id: 'risk',        label: 'Risk',            icon: '🛡️' },
@@ -84,6 +92,10 @@ export default function Dashboard() {
     switch (activePage) {
       case 'dashboard':   return <LivePnL dashboardData={dashboardData} />;
       case 'manual':      return <ManualTrading />;
+      case 'catalog':     return <StrategyCatalog />;
+      case 'backtest':    return <Backtest />;
+      case 'greeks':      return <GreeksAnalysis />;
+      case 'payoff':      return <PayoffDiagram />;
       case 'open':        return <OpenTrades />;
       case 'closed':      return <ClosedTrades />;
       case 'risk':        return <RiskPanel />;

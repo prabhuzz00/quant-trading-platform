@@ -83,3 +83,23 @@ export const regimeAPI = {
   getConfig: () => api.get('/regime/config'),
   updateConfig: (data) => api.put('/regime/config', data),
 };
+
+export const catalogAPI = {
+  list: () => api.get('/strategies/list'),
+  categories: () => api.get('/strategies/categories'),
+  search: (q) => api.get('/strategies/search', { params: { q } }),
+  detail: (id) => api.get(`/strategies/detail/${id}`),
+  build: (data) => api.post('/strategies/build', data),
+  greeks: (data) => api.post('/strategies/greeks', data),
+  optionPrice: (data) => api.post('/strategies/option-price', data),
+  impliedVol: (data) => api.post('/strategies/implied-volatility', data),
+};
+
+export const backtestAPI = {
+  run: (data) => api.post('/backtest', data),
+  compare: (data) => api.post('/backtest/compare', data),
+};
+
+export const payoffAPI = {
+  calculate: (data) => api.post('/payoff', data),
+};
