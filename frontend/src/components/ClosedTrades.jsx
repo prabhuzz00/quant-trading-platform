@@ -67,12 +67,12 @@ export default function ClosedTrades() {
   useEffect(() => { fetchTrades(); }, [fetchTrades]);
 
   const strategies = [...new Set(trades.map(t => t.strategy_name ?? t.strategy).filter(Boolean))];
-  const totalPnl = trades.reduce((acc, t) => acc + (Number(t.realized_pnl) || 0), 0);
-  const winners = trades.filter(t => Number(t.realized_pnl) > 0);
-  const losers  = trades.filter(t => Number(t.realized_pnl) < 0);
+  const totalPnl = trades.reduce((acc, t) => acc + (Number(t.realized_pnl ?? t.pnl) || 0), 0);
+  const winners = trades.filter(t => Number(t.realized_pnl ?? t.pnl) > 0);
+  const losers  = trades.filter(t => Number(t.realized_pnl ?? t.pnl) < 0);
   const winRate = trades.length > 0 ? (winners.length / trades.length * 100).toFixed(1) : null;
-  const avgWin  = winners.length > 0 ? winners.reduce((a, t) => a + Number(t.realized_pnl), 0) / winners.length : null;
-  const avgLoss = losers.length  > 0 ? losers.reduce((a, t)  => a + Number(t.realized_pnl), 0) / losers.length  : null;
+  const avgWin  = winners.length > 0 ? winners.reduce((a, t) => a + Number(t.realized_pnl ?? t.pnl), 0) / winners.length : null;
+  const avgLoss = losers.length  > 0 ? losers.reduce((a, t)  => a + Number(t.realized_pnl ?? t.pnl), 0) / losers.length  : null;
 
   return (
     <div>
@@ -89,8 +89,8 @@ export default function ClosedTrades() {
       {/* Summary */}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <div className="stat-card">
-          <div className="stat-label">Total PnL</div>
-          <div className={`stat-value ${pnlClass(totalPnl)}`}>{pnlSign(totalPnl)}</div>
+          <div className="stat-label">Total Realized PnL</div>
+          <div className={`stat-value ${pnlClass(totalPnl)}`} style={{ fontSize: 18 }}>{pnlSign(totalPnl)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Win Rate</div>
@@ -104,6 +104,10 @@ export default function ClosedTrades() {
         <div className="stat-card">
           <div className="stat-label">Avg Loss</div>
           <div className={`stat-value ${pnlClass(avgLoss)}`}>{avgLoss != null ? pnlSign(avgLoss) : '—'}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Total Trades</div>
+          <div className="stat-value">{trades.length}</div>
         </div>
       </div>
 
@@ -163,8 +167,8 @@ export default function ClosedTrades() {
                 <th>Symbol</th>
                 <th>Side</th>
                 <th>Qty</th>
-                <th>Entry Price</th>
-                <th>Exit Price</th>
+                <th>Avg Entry Price</th>
+                <th>Limit Price</th>
                 <th>Realized PnL</th>
                 <th>Exit Reason</th>
                 <th>Strategy</th>
@@ -173,27 +177,27 @@ export default function ClosedTrades() {
             </thead>
             <tbody>
               {trades.map((trade) => {
-                const pnl = Number(trade.realized_pnl) || 0;
+                const pnl = Number(trade.realized_pnl ?? trade.pnl) || 0;
                 return (
-                  <tr key={trade.id} className={pnl >= 0 ? 'row-profit' : 'row-loss'}>
+                  <tr key={trade.order_id ?? trade.id} className={pnl >= 0 ? 'row-profit' : 'row-loss'}>
                     <td><strong>{trade.symbol}</strong></td>
                     <td>
-                      <span className={`badge ${trade.side === 'BUY' ? 'badge-profit' : 'badge-loss'}`}>
-                        {trade.side}
+                      <span className={`badge ${trade.action === 'BUY' ? 'badge-profit' : 'badge-loss'}`}>
+                        {trade.action}
                       </span>
                     </td>
-                    <td className="td-mono">{trade.quantity ?? trade.qty ?? '—'}</td>
-                    <td className="td-mono">₹{fmt(trade.entry_price)}</td>
-                    <td className="td-mono">₹{fmt(trade.exit_price)}</td>
+                    <td className="td-mono">{trade.filled_qty ?? trade.quantity ?? '—'}</td>
+                    <td className="td-mono">₹{fmt(trade.avg_price)}</td>
+                    <td className="td-mono">₹{fmt(trade.limit_price)}</td>
                     <td className={`td-mono ${pnlClass(pnl)}`} style={{ fontWeight: 600 }}>
                       {pnlSign(pnl)}
                     </td>
-                    <td>{exitReasonBadge(trade.exit_reason)}</td>
+                    <td>{exitReasonBadge(trade.reason)}</td>
                     <td>
                       <span className="badge badge-strategy">{trade.strategy_name ?? trade.strategy ?? '—'}</span>
                     </td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      {fmtDate(trade.closed_at ?? trade.exit_time)}
+                      {fmtDate(trade.updated_at ?? trade.created_at)}
                     </td>
                   </tr>
                 );

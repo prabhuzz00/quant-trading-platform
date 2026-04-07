@@ -443,8 +443,15 @@ class XTSInteractiveClient:
     async def get_positions(self, day_or_net: str = "NetWise") -> Dict:
         await self._query_limiter.acquire()
         client = await self._get_client()
-        params = self._inject_client_id({"dayOrNet": day_or_net})
-        resp = await client.get(f"{self.url}/interactive/portfolio/positions", params=params, headers=self._headers())
+        if self._is_dealer():
+            endpoint = f"{self.url}/interactive/portfolio/dealerpositions"
+            params = self._inject_client_id({"dayOrNet": day_or_net})
+        else:
+            endpoint = f"{self.url}/interactive/portfolio/positions"
+            params = {"dayOrNet": day_or_net}
+        full_url = str(httpx.URL(endpoint).copy_with(params=params))
+        logger.info("XTS API request", method="GET", url=full_url)
+        resp = await client.get(endpoint, params=params, headers=self._headers())
         return self._handle_response(resp)
 
     async def get_balance(self) -> Dict:
@@ -506,6 +513,8 @@ class XTSInteractiveClient:
         await self._query_limiter.acquire()
         client = await self._get_client()
         params = {"dayOrNet": day_or_net}
+        full_url = str(httpx.URL(f"{self.url}/interactive/portfolio/dealerpositions").copy_with(params=params))
+        logger.info("XTS API request", method="GET", url=full_url)
         resp = await client.get(
             f"{self.url}/interactive/portfolio/dealerpositions",
             params=params,

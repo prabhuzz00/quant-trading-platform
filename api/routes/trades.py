@@ -2,7 +2,8 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.dependencies import get_order_manager, get_trade_manager
 from api.schemas import (
@@ -14,6 +15,7 @@ from api.schemas import (
 )
 
 router = APIRouter(prefix="/trades", tags=["trades"])
+logger = structlog.get_logger(__name__)
 
 
 def _enrich_trade(trade: dict) -> dict:
@@ -55,11 +57,13 @@ async def list_open_trades(
 
 @router.get("/closed", response_model=TradeListResponse)
 async def list_closed_trades(
+    request: Request,
     date_filter: Optional[str] = Query(None, alias="date", description="Filter by date YYYY-MM-DD"),
     strategy: Optional[str] = Query(None, description="Filter by strategy name"),
     trade_manager=Depends(get_trade_manager),
 ):
     """List closed trades with optional date and strategy filters."""
+    logger.info("Closed trades request", url=str(request.url))
     all_trades = trade_manager.get_all_trades()
     closed = [t for t in all_trades if t.get("status") == "CLOSED"]
 

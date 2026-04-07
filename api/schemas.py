@@ -24,6 +24,8 @@ class TradeResponse(BaseModel):
     stoploss_points: float = 0.0
     target_points: float = 0.0
     pnl: float = 0.0
+    realized_pnl: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
     status: str = "PENDING"
     reason: Optional[str] = None
     created_at: datetime

@@ -49,8 +49,11 @@ export default function PositionViewer() {
     return () => clearInterval(timerRef.current);
   }, [fetchPositions]);
 
-  const totalMtm = positions.reduce((acc, p) => acc + (Number(p.mtm_pnl ?? p.realized_mtm ?? 0)), 0);
-  const netQtyNonZero = positions.filter(p => Number(p.net_qty ?? p.net_quantity ?? 0) !== 0).length;
+  const totalRealized   = positions.reduce((acc, p) => acc + (Number(p.realized_mtm ?? 0)), 0);
+  const totalUnrealized = positions.reduce((acc, p) => acc + (Number(p.unrealized_mtm ?? 0)), 0);
+  const totalMtm = totalRealized + totalUnrealized;
+  const totalActualPnl = positions.reduce((acc, p) => acc + (Number(p.net_amount ?? 0)), 0);
+  const netQtyNonZero = positions.filter(p => Number(p.net_qty ?? 0) !== 0).length;
 
   return (
     <div>
@@ -76,6 +79,24 @@ export default function PositionViewer() {
 
       {positions.length > 0 && (
         <div className="stat-grid" style={{ marginBottom: 16 }}>
+          <div className="stat-card">
+            <div className="stat-label">Total Actual PnL</div>
+            <div className={`stat-value ${pnlClass(totalActualPnl)}`} style={{ fontSize: 18 }}>
+              {pnlSign(totalActualPnl)}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Realized MTM</div>
+            <div className={`stat-value ${pnlClass(totalRealized)}`} style={{ fontSize: 18 }}>
+              {pnlSign(totalRealized)}
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Unrealized MTM</div>
+            <div className={`stat-value ${pnlClass(totalUnrealized)}`} style={{ fontSize: 18 }}>
+              {pnlSign(totalUnrealized)}
+            </div>
+          </div>
           <div className="stat-card">
             <div className="stat-label">Total MTM PnL</div>
             <div className={`stat-value ${pnlClass(totalMtm)}`} style={{ fontSize: 18 }}>
@@ -123,34 +144,38 @@ export default function PositionViewer() {
             <thead>
               <tr>
                 <th>Symbol</th>
-                <th>Buy Qty</th>
-                <th>Sell Qty</th>
-                <th>Net Qty</th>
                 <th>Avg Buy Price</th>
                 <th>Avg Sell Price</th>
-                <th>MTM PnL</th>
+                <th>Open Buy Qty</th>
+                <th>Open Sell Qty</th>
+                <th>Buy Amount</th>
+                <th>Sell Amount</th>
+                <th>Net Amount</th>
+                <th>Unrealized MTM</th>
+                <th>Realized MTM</th>
               </tr>
             </thead>
             <tbody>
-              {positions.map((pos, i) => {
-                const netQty  = Number(pos.net_qty ?? pos.net_quantity ?? 0);
-                const mtmPnl  = pos.mtm_pnl ?? pos.realized_mtm;
-                return (
-                  <tr key={pos.symbol ?? i}>
-                    <td><strong>{pos.symbol}</strong></td>
-                    <td className="td-mono">{pos.buy_qty ?? pos.buy_quantity ?? '—'}</td>
-                    <td className="td-mono">{pos.sell_qty ?? pos.sell_quantity ?? '—'}</td>
-                    <td className="td-mono" style={{ fontWeight: 600, color: netQty > 0 ? 'var(--color-profit)' : netQty < 0 ? 'var(--color-loss)' : 'var(--text-secondary)' }}>
-                      {netQty > 0 ? `+${netQty}` : netQty}
-                    </td>
-                    <td className="td-mono">₹{fmt(pos.avg_buy_price)}</td>
-                    <td className="td-mono">₹{fmt(pos.avg_sell_price)}</td>
-                    <td className={`td-mono ${pnlClass(mtmPnl)}`} style={{ fontWeight: 600 }}>
-                      {pnlSign(mtmPnl)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {positions.map((pos, i) => (
+                <tr key={pos.symbol ?? i}>
+                  <td><strong>{pos.symbol}</strong></td>
+                  <td className="td-mono">₹{fmt(pos.avg_buy_price)}</td>
+                  <td className="td-mono">₹{fmt(pos.avg_sell_price)}</td>
+                  <td className="td-mono">{pos.open_buy_qty ?? '—'}</td>
+                  <td className="td-mono">{pos.open_sell_qty ?? '—'}</td>
+                  <td className="td-mono">₹{fmt(pos.buy_amount)}</td>
+                  <td className="td-mono">₹{fmt(pos.sell_amount)}</td>
+                  <td className={`td-mono ${pnlClass(pos.net_amount)}`} style={{ fontWeight: 600 }}>
+                    {pnlSign(pos.net_amount)}
+                  </td>
+                  <td className={`td-mono ${pnlClass(pos.unrealized_mtm)}`} style={{ fontWeight: 600 }}>
+                    {pnlSign(pos.unrealized_mtm)}
+                  </td>
+                  <td className={`td-mono ${pnlClass(pos.realized_mtm)}`} style={{ fontWeight: 600 }}>
+                    {pnlSign(pos.realized_mtm)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

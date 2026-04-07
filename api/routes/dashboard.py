@@ -7,6 +7,7 @@ import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.dependencies import app_state
+from core.xts_client import XTSAPIError
 
 router = APIRouter(tags=["dashboard"])
 logger = structlog.get_logger(__name__)
@@ -38,6 +39,9 @@ async def _fetch_margin() -> dict:
                 "available_margin": float(available) if available is not None else None,
                 "margin_used": float(used) if used is not None else None,
             }
+    except XTSAPIError as exc:
+        if getattr(exc, "code", None) != "DEALER_BALANCE_UNAVAILABLE":
+            logger.warning("Failed to fetch margin from XTS balance API", error=str(exc))
     except Exception as exc:
         logger.warning("Failed to fetch margin from XTS balance API", error=str(exc))
     return {"available_margin": None, "margin_used": None}
