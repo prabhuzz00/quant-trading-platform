@@ -8,7 +8,7 @@ and Greeks analysis tabs.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 # ---------------------------------------------------------------------------
@@ -190,11 +190,7 @@ class StrategyGreeks:
     net_rho: float
     max_profit: Optional[float] = None
     max_loss: Optional[float] = None
-    legs: List[LegGreeks] = None  # type: ignore[assignment]
-
-    def __post_init__(self):
-        if self.legs is None:
-            self.legs = []
+    legs: List[LegGreeks] = field(default_factory=list)
 
 
 def compute_strategy_greeks(
