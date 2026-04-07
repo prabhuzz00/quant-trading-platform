@@ -11,20 +11,20 @@ from pydantic import BaseModel, Field
 class TradeResponse(BaseModel):
     order_id: str
     signal_id: Optional[str] = None
-    strategy_name: str
+    strategy_name: str = "Manual"
     symbol: str
-    exchange_segment: str
-    exchange_instrument_id: int
-    action: str
-    order_mode: str
-    quantity: int
-    limit_price: float
-    filled_qty: int
-    avg_price: float
-    stoploss_points: float
-    target_points: float
-    pnl: float
-    status: str
+    exchange_segment: str = ""
+    exchange_instrument_id: int = 0
+    action: str = "BUY"
+    order_mode: str = "REGULAR"
+    quantity: int = 0
+    limit_price: float = 0.0
+    filled_qty: int = 0
+    avg_price: float = 0.0
+    stoploss_points: float = 0.0
+    target_points: float = 0.0
+    pnl: float = 0.0
+    status: str = "PENDING"
     reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
