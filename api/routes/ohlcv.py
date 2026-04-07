@@ -50,8 +50,9 @@ async def fetch_ohlcv(
             lookback_days=body.lookback_days,
         )
     except Exception as exc:
-        logger.error("OHLCV fetch failed", error=str(exc))
-        raise HTTPException(status_code=502, detail="Failed to fetch OHLCV data from XTS API")
+        import traceback
+        logger.error("OHLCV fetch failed", error=str(exc), traceback=traceback.format_exc())
+        raise HTTPException(status_code=502, detail=f"Failed to fetch OHLCV data from XTS API: {exc}")
 
     return OHLCVFetchResponse(
         message=f"Fetched and stored {count} candle(s)",

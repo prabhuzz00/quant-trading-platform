@@ -41,12 +41,14 @@ def _parse_ohlc_result(result: Any) -> List[Candle]:
     candles: List[Candle] = []
 
     if isinstance(result, str):
-        for part in result.split("|"):
-            part = part.strip()
+        # Format: "ts|open|high|low|close|vol|oi|,ts|open|..."
+        # Candles are comma-separated; fields within each candle are pipe-separated.
+        for part in result.split(","):
+            part = part.strip().rstrip("|")
             if not part:
                 continue
             try:
-                fields = part.split(",")
+                fields = part.split("|")
                 ts = datetime.fromtimestamp(int(fields[0]), tz=timezone.utc)
                 candles.append(
                     Candle(
@@ -159,7 +161,10 @@ class WarmupService:
                 end_time=end_str,
                 compression_value=compression,
             )
-            result = response.get("result", "")
+            result = response.get("result", {})
+            # XTS wraps candle data in result dict under "dataReponse" (broker typo)
+            if isinstance(result, dict):
+                result = result.get("dataReponse") or result.get("dataResponse", "")
             candles = _parse_ohlc_result(result)
 
             # Keep only the last n_candles

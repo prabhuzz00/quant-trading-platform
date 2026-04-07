@@ -48,12 +48,14 @@ def _parse_ohlc_result(result: Any) -> List[Dict[str, Any]]:
     candles: List[Dict[str, Any]] = []
 
     if isinstance(result, str):
-        for part in result.split("|"):
-            part = part.strip()
+        # Format: "ts|open|high|low|close|vol|oi|,ts|open|..."
+        # Candles are comma-separated; fields within each candle are pipe-separated.
+        for part in result.split(","):
+            part = part.strip().rstrip("|")
             if not part:
                 continue
             try:
-                fields = part.split(",")
+                fields = part.split("|")
                 candles.append(
                     {
                         "timestamp": datetime.fromtimestamp(int(fields[0]), tz=timezone.utc),
@@ -166,7 +168,13 @@ class OHLCVService:
             compression_value=compression,
         )
 
-        raw_result = response.get("result", "")
+        logger.info("XTS OHLC raw response", response=response)
+        # XTS wraps data in result dict with a "dataReponse" key (broker typo)
+        result_data = response.get("result", {})
+        if isinstance(result_data, dict):
+            raw_result = result_data.get("dataReponse") or result_data.get("dataResponse", "")
+        else:
+            raw_result = result_data
         candles = _parse_ohlc_result(raw_result)
 
         if not candles:

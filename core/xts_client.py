@@ -69,6 +69,7 @@ class XTSMarketDataClient:
         return headers
 
     def _handle_response(self, resp: httpx.Response) -> Dict:
+        logger.info("XTS API response", status_code=resp.status_code, url=str(resp.url), body=resp.text[:2000])
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict) and data.get("type") == "error":
@@ -188,6 +189,8 @@ class XTSMarketDataClient:
             "endTime": end_time,
             "compressionValue": compression_value,
         }
+        full_url = str(httpx.URL(f"{self.url}/apimarketdata/instruments/ohlc").copy_with(params=params))
+        logger.info("XTS API request", method="GET", url=full_url)
         resp = await client.get(
             f"{self.url}/apimarketdata/instruments/ohlc",
             params=params,
@@ -246,6 +249,7 @@ class XTSInteractiveClient:
         return headers
 
     def _handle_response(self, resp: httpx.Response) -> Dict:
+        logger.info("XTS API response", status_code=resp.status_code, url=str(resp.url), body=resp.text[:2000])
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict) and data.get("type") == "error":
