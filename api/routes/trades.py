@@ -1,11 +1,11 @@
 """Trade routes: open/closed trades, square-off operations."""
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.dependencies import get_order_manager, get_trade_manager
+from api.dependencies import get_order_manager, get_trade_manager, get_xts_interactive
 from api.schemas import (
     ErrorResponse,
     SquareOffRequest,
@@ -42,13 +42,96 @@ def _enrich_trade(trade: dict) -> dict:
     return enriched
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _trade_from_position(pos: dict) -> dict:
+    """Build a trade dict from a raw XTS position with a non-zero net quantity."""
+    net_qty = int(pos.get("NetQuantity", 0) or pos.get("Quantity", 0) or 0)
+    action = "BUY" if net_qty > 0 else "SELL"
+    symbol = pos.get("TradingSymbol", "") or pos.get("symbol", "")
+    avg_price = (
+        _safe_float(pos.get("BuyAveragePrice")) if net_qty > 0
+        else _safe_float(pos.get("SellAveragePrice"))
+    )
+    unrealized = _safe_float(pos.get("UnrealizedMTM"))
+    now = datetime.now(timezone.utc)
+    return {
+        "order_id": f"POS-{pos.get('ExchangeInstrumentID', symbol)}",
+        "signal_id": None,
+        "strategy_name": "Broker",
+        "symbol": symbol,
+        "exchange_segment": pos.get("ExchangeSegment", "") or "",
+        "exchange_instrument_id": int(pos.get("ExchangeInstrumentID", 0) or 0),
+        "action": action,
+        "order_mode": pos.get("ProductType", "REGULAR") or "REGULAR",
+        "quantity": abs(net_qty),
+        "limit_price": 0.0,
+        "filled_qty": abs(net_qty),
+        "avg_price": avg_price,
+        "stoploss_points": 0.0,
+        "target_points": 0.0,
+        "pnl": unrealized,
+        "unrealized_pnl": unrealized,
+        "realized_pnl": 0.0,
+        "status": "OPEN",
+        "reason": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _extract_position_list(data) -> list:
+    """Extract positions list from various XTS response shapes."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        result = data.get("result")
+        if isinstance(result, dict):
+            pos_list = result.get("positionList")
+            if isinstance(pos_list, list):
+                return pos_list
+        for key in ("result", "positionList"):
+            val = data.get(key)
+            if isinstance(val, list):
+                return val
+    return []
+
+
 @router.get("/open", response_model=TradeListResponse)
 async def list_open_trades(
     trade_manager=Depends(get_trade_manager),
+    xts=Depends(get_xts_interactive),
 ):
-    """List all currently open trades with unrealized PnL."""
+    """List all currently open trades with unrealized PnL.
+
+    Merges internally tracked trades with live broker positions so that
+    trades placed externally (or missed by the order socket) still appear.
+    """
+    # 1. Internal trades from TradeManager
     trades = trade_manager.get_open_trades()
     enriched = [_enrich_trade(t) for t in trades]
+    tracked_symbols = {t.get("symbol") for t in enriched}
+
+    # 2. Live broker positions — add any that are not already tracked
+    try:
+        raw_data = await xts.get_positions("NetWise")
+        positions = _extract_position_list(raw_data)
+        for pos in positions:
+            net_qty = int(pos.get("NetQuantity", 0) or pos.get("Quantity", 0) or 0)
+            symbol = pos.get("TradingSymbol", "") or pos.get("symbol", "")
+            if net_qty != 0 and symbol not in tracked_symbols:
+                enriched.append(_trade_from_position(pos))
+                tracked_symbols.add(symbol)
+    except Exception as exc:
+        logger.warning("Could not fetch XTS positions for trade merge", error=str(exc))
+
     return TradeListResponse(
         trades=[TradeResponse(**t) for t in enriched],
         total=len(enriched),
