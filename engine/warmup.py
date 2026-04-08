@@ -10,15 +10,16 @@ from core.xts_client import XTSMarketDataClient
 
 logger = structlog.get_logger(__name__)
 
-# XTS compressionValue mapping: timeframe (minutes) → compression integer
+# XTS compressionValue mapping: timeframe (minutes) → compression in seconds
+# The XTS OHLC API expects compressionValue in seconds (60 = 1-minute candles).
 _TIMEFRAME_TO_COMPRESSION: dict = {
-    1: 1,
-    3: 3,
-    5: 5,
-    10: 10,
-    15: 15,
-    30: 30,
-    60: 60,
+    1: 60,
+    3: 180,
+    5: 300,
+    10: 600,
+    15: 900,
+    30: 1800,
+    60: 3600,
 }
 
 # XTS OHLC startTime / endTime format expected by the API

@@ -16,7 +16,7 @@ class TestParseOhlcResult:
     """Unit tests for the candle parser."""
 
     def test_pipe_separated_string(self):
-        raw = "1609459200,19000.00,19050.00,18980.00,19020.00,1000000|1609459260,19020.00,19060.00,18990.00,19040.00,500000"
+        raw = "1609459200|19000.00|19050.00|18980.00|19020.00|1000000|0,1609459260|19020.00|19060.00|18990.00|19040.00|500000|0"
         candles = _parse_ohlc_result(raw)
         assert len(candles) == 2
         assert candles[0]["open"] == 19000.00
@@ -27,7 +27,7 @@ class TestParseOhlcResult:
         assert isinstance(candles[0]["timestamp"], datetime)
 
     def test_pipe_separated_trailing_pipe(self):
-        raw = "1609459200,100.0,110.0,90.0,105.0,500|"
+        raw = "1609459200|100.0|110.0|90.0|105.0|500|0,"
         candles = _parse_ohlc_result(raw)
         assert len(candles) == 1
 
@@ -55,12 +55,12 @@ class TestParseOhlcResult:
         assert _parse_ohlc_result([]) == []
 
     def test_malformed_string_entries_skipped(self):
-        raw = "bad_data|1609459200,100.0,110.0,90.0,105.0,500"
+        raw = "bad_data,1609459200|100.0|110.0|90.0|105.0|500|0"
         candles = _parse_ohlc_result(raw)
         assert len(candles) == 1
 
     def test_missing_volume_defaults_to_zero(self):
-        raw = "1609459200,100.0,110.0,90.0,105.0"
+        raw = "1609459200|100.0|110.0|90.0|105.0"
         candles = _parse_ohlc_result(raw)
         assert len(candles) == 1
         assert candles[0]["volume"] == 0.0
@@ -84,7 +84,10 @@ class TestOHLCVServiceFetchAndStore:
     async def test_fetch_and_store_returns_count(self, mock_xts_client):
         """Successful XTS response produces upserted count."""
         mock_xts_client.get_ohlc.return_value = {
-            "result": "1609459200,100.0,110.0,90.0,105.0,500|1609459260,105.0,115.0,95.0,110.0,600",
+            "type": "success",
+            "result": {
+                "dataReponse": "1609459200|100.0|110.0|90.0|105.0|500|0,1609459260|105.0|115.0|95.0|110.0|600|0"
+            },
         }
 
         service = OHLCVService(mock_xts_client)
@@ -95,7 +98,7 @@ class TestOHLCVServiceFetchAndStore:
     @pytest.mark.asyncio
     async def test_fetch_and_store_no_candles(self, mock_xts_client):
         """Empty result from XTS returns 0."""
-        mock_xts_client.get_ohlc.return_value = {"result": ""}
+        mock_xts_client.get_ohlc.return_value = {"result": {"dataReponse": ""}}
         service = OHLCVService(mock_xts_client)
         count = await service.fetch_and_store()
         assert count == 0
@@ -103,7 +106,7 @@ class TestOHLCVServiceFetchAndStore:
     @pytest.mark.asyncio
     async def test_fetch_and_store_calls_xts_api(self, mock_xts_client):
         """Verify the XTS client is called with the correct parameters."""
-        mock_xts_client.get_ohlc.return_value = {"result": ""}
+        mock_xts_client.get_ohlc.return_value = {"result": {"dataReponse": ""}}
         service = OHLCVService(mock_xts_client)
         await service.fetch_and_store(
             exchange_segment="NSECM",
@@ -113,7 +116,7 @@ class TestOHLCVServiceFetchAndStore:
         mock_xts_client.get_ohlc.assert_called_once()
         call_kwargs = mock_xts_client.get_ohlc.call_args
         assert call_kwargs.kwargs["exchange_instrument_id"] == 26000
-        assert call_kwargs.kwargs["compression_value"] == 5
+        assert call_kwargs.kwargs["compression_value"] == 300  # 5 min × 60 s/min
 
 
 # ---------------------------------------------------------------------------

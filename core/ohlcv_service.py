@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.xts_client import XTSMarketDataClient, EXCHANGE_SEGMENTS
+from core.xts_client import XTSMarketDataClient
 from database.db import get_session
 from database.models import OHLCVData
 
@@ -27,15 +27,16 @@ NIFTY50_SYMBOL = "NIFTY 50"
 # XTS OHLC startTime / endTime format expected by the API
 _XTS_TIME_FMT = "%b %d %Y %H%M%S"
 
-# XTS compression-value mapping (timeframe minutes → compression integer)
+# XTS compression-value mapping (timeframe minutes → compression in seconds)
+# The XTS OHLC API expects compressionValue in seconds (60 = 1-minute candles).
 _TIMEFRAME_TO_COMPRESSION: Dict[int, int] = {
-    1: 1,
-    3: 3,
-    5: 5,
-    10: 10,
-    15: 15,
-    30: 30,
-    60: 60,
+    1: 60,
+    3: 180,
+    5: 300,
+    10: 600,
+    15: 900,
+    30: 1800,
+    60: 3600,
 }
 
 
@@ -147,9 +148,8 @@ class OHLCVService:
         if end_time is None:
             end_time = end_dt.strftime(_XTS_TIME_FMT)
 
-        # Resolve the exchange_segment to its numeric code for the API call
-        seg_value = EXCHANGE_SEGMENTS.get(exchange_segment, exchange_segment)
-
+        # Pass the exchange segment name directly – the OHLC endpoint expects
+        # the string name (e.g. "NSECM"), not a numeric segment code.
         logger.info(
             "Fetching OHLCV data from XTS",
             exchange_segment=exchange_segment,
@@ -161,7 +161,7 @@ class OHLCVService:
         )
 
         response = await self.xts_client.get_ohlc(
-            exchange_segment=seg_value,
+            exchange_segment=exchange_segment,
             exchange_instrument_id=exchange_instrument_id,
             start_time=start_time,
             end_time=end_time,

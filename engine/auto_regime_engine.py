@@ -304,9 +304,10 @@ class AutoRegimeEngine:
     # XTS OHLC startTime / endTime format
     _XTS_TIME_FMT = "%b %d %Y %H%M%S"
 
-    # XTS compressionValue mapping: timeframe minutes → compression integer
+    # XTS compressionValue mapping: timeframe (minutes) → compression in seconds
+    # The XTS OHLC API expects compressionValue in seconds (60 = 1-minute candles).
     _TIMEFRAME_TO_COMPRESSION: Dict[int, int] = {
-        1: 1, 3: 3, 5: 5, 10: 10, 15: 15, 30: 30, 60: 60,
+        1: 60, 3: 180, 5: 300, 10: 600, 15: 900, 30: 1800, 60: 3600,
     }
 
     async def _fetch_candles_from_api(self) -> List[Candle]:
@@ -324,8 +325,6 @@ class AutoRegimeEngine:
             return []
 
         try:
-            from core.xts_client import EXCHANGE_SEGMENTS
-
             compression = self._TIMEFRAME_TO_COMPRESSION.get(
                 self.timeframe, self.timeframe
             )
@@ -336,12 +335,8 @@ class AutoRegimeEngine:
             end_dt = datetime.now(timezone.utc)
             start_dt = end_dt - timedelta(minutes=lookback_minutes)
 
-            seg_value = EXCHANGE_SEGMENTS.get(
-                self.exchange_segment, self.exchange_segment
-            )
-
             response = await self._xts_client.get_ohlc(
-                exchange_segment=seg_value,
+                exchange_segment=self.exchange_segment,
                 exchange_instrument_id=self.instrument_id,
                 start_time=start_dt.strftime(self._XTS_TIME_FMT),
                 end_time=end_dt.strftime(self._XTS_TIME_FMT),
@@ -349,6 +344,9 @@ class AutoRegimeEngine:
             )
 
             raw_result = response.get("result", "")
+            # XTS wraps candle data in result dict under "dataReponse" (broker typo)
+            if isinstance(raw_result, dict):
+                raw_result = raw_result.get("dataReponse") or raw_result.get("dataResponse", "")
             parsed = _parse_ohlc_service(raw_result)
 
             if not parsed:
