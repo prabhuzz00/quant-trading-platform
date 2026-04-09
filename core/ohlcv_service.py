@@ -155,9 +155,22 @@ class OHLCVService:
             exchange_segment=exchange_segment,
             instrument_id=exchange_instrument_id,
             symbol=symbol,
-            timeframe=timeframe,
-            start_time=start_time,
-            end_time=end_time,
+            timeframe_min=timeframe,
+            compression_value_sec=compression,
+            lookback_days=lookback_days,
+            start_dt_utc=start_dt.isoformat(),
+            end_dt_utc=end_dt.isoformat(),
+            start_time_formatted=start_time,
+            end_time_formatted=end_time,
+            time_format=_XTS_TIME_FMT,
+        )
+        logger.debug(
+            "XTS OHLC API call parameters",
+            api_param_exchangeSegment=exchange_segment,
+            api_param_exchangeInstrumentID=exchange_instrument_id,
+            api_param_startTime=start_time,
+            api_param_endTime=end_time,
+            api_param_compressionValue=compression,
         )
 
         response = await self.xts_client.get_ohlc(
@@ -168,13 +181,26 @@ class OHLCVService:
             compression_value=compression,
         )
 
-        logger.info("XTS OHLC raw response", response=response)
+        logger.info(
+            "XTS OHLC raw response",
+            http_status=response.get("type"),
+            code=response.get("code"),
+            description=response.get("description"),
+            result_keys=list(response.get("result", {}).keys()) if isinstance(response.get("result"), dict) else type(response.get("result")).__name__,
+        )
+        logger.debug("XTS OHLC full response dump", response=response)
         # XTS wraps data in result dict with a "dataReponse" key (broker typo)
         result_data = response.get("result", {})
         if isinstance(result_data, dict):
             raw_result = result_data.get("dataReponse") or result_data.get("dataResponse", "")
         else:
             raw_result = result_data
+        logger.debug(
+            "Raw result fed to parser",
+            raw_result_type=type(raw_result).__name__,
+            raw_result_length=len(raw_result) if raw_result else 0,
+            raw_result_preview=str(raw_result)[:500] if raw_result else None,
+        )
         candles = _parse_ohlc_result(raw_result)
 
         if not candles:
@@ -183,6 +209,35 @@ class OHLCVService:
                 instrument_id=exchange_instrument_id,
             )
             return 0
+
+        # --- debug: log every parsed candle ---
+        first_ts = candles[0]["timestamp"]
+        last_ts = candles[-1]["timestamp"]
+        duration = last_ts - first_ts
+        logger.info(
+            "OHLCV data received",
+            symbol=symbol,
+            timeframe_min=timeframe,
+            candle_count=len(candles),
+            first_candle=first_ts.isoformat(),
+            last_candle=last_ts.isoformat(),
+            duration_days=duration.days,
+            duration_hours=int(duration.total_seconds() // 3600),
+            duration_minutes=int(duration.total_seconds() / 60),
+        )
+        logger.debug("Full candle dump start", total=len(candles))
+        for idx, c in enumerate(candles):
+            logger.debug(
+                "candle",
+                index=idx,
+                timestamp=c["timestamp"].isoformat(),
+                open=c["open"],
+                high=c["high"],
+                low=c["low"],
+                close=c["close"],
+                volume=c["volume"],
+            )
+        logger.debug("Full candle dump end")
 
         # Persist to PostgreSQL using upsert (ON CONFLICT DO UPDATE)
         upserted = await self._upsert_candles(
